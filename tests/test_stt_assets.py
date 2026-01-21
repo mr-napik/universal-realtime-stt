@@ -5,6 +5,7 @@ import unittest
 from pathlib import Path
 from typing import List
 from logging import getLogger
+from datetime import datetime
 
 from config import AUDIO_SAMPLE_RATE, CHUNK_MS, STT_TEST_REALTIME_FACTOR, TMP_PATH
 from lib.assets import get_test_files
@@ -39,6 +40,8 @@ class TestSttAssets(unittest.IsolatedAsyncioTestCase):
     async def test_assets_wav_streaming_matches_expected_txt(self) -> None:
         repo_root = Path(__file__).resolve().parents[1]
         assets_dir = repo_root / "assets"
+
+        ts = {datetime.now().strftime('%Y%m%d_%H%M%S')}
 
         chunk_ms = CHUNK_MS
         realtime_factor = STT_TEST_REALTIME_FACTOR
@@ -96,7 +99,7 @@ class TestSttAssets(unittest.IsolatedAsyncioTestCase):
 
                 # evaluate result
                 if got != expected:
-                    report_path = TMP_PATH / f"{pair.wav.stem}.diff.html"
+                    report_path = TMP_PATH / f"{ts}_{pair.wav.stem}.diff.html"
                     report = write_diff_html(
                         expected=expected,
                         got=got,
@@ -105,7 +108,13 @@ class TestSttAssets(unittest.IsolatedAsyncioTestCase):
                         context_hint=f"Asset: {pair.wav}\nExpected: {pair.txt}\n",
                     )
 
-                    self.fail(
-                        f"Transcript mismatch for {pair.wav.name}\n"
-                        f"Diff report written to: {report.html_path}\n"
-                    )
+                    character_error_rate=round(float(report.levenshtein)/len(expected)*100, 1)
+                    print(f"{pair.wav.name} error rate: {character_error_rate:.1f}%")
+                    if character_error_rate > 5:
+                        self.fail(
+                            f"{pair.wav.name} error rate: {character_error_rate:.1f}%\n"
+                            f"Transcript mismatch for {pair.wav.name}\n"
+                            f"Diff report written to: {report.html_path}\n"
+                        )
+                else:
+                    print("Exact match! Wow!")

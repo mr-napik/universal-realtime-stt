@@ -4,12 +4,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from diff_match_patch import diff_match_patch
 
 @dataclass(frozen=True)
 class DiffReport:
     html_path: Path
     expected: str
     got: str
+    levenshtein: int
 
 
 def write_diff_html(
@@ -33,16 +35,10 @@ def write_diff_html(
     out_path = out_path.resolve()
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    try:
-        from diff_match_patch import diff_match_patch
-    except Exception as e:
-        raise RuntimeError(
-            "diff-match-patch is not available. Install with: pip install diff-match-patch"
-        ) from e
-
     dmp = diff_match_patch()
     diffs = dmp.diff_main(expected, got)
     dmp.diff_cleanupSemantic(diffs)
+    levenshtein = dmp.diff_levenshtein(diffs)
 
     diff_html = dmp.diff_prettyHtml(diffs)
 
@@ -129,7 +125,7 @@ def write_diff_html(
 </html>
 """
     out_path.write_text(html, encoding="utf-8")
-    return DiffReport(html_path=out_path, expected=expected, got=got)
+    return DiffReport(html_path=out_path, expected=expected, got=got, levenshtein=levenshtein)
 
 
 def _escape_html(s: Optional[str]) -> str:
