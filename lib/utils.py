@@ -1,5 +1,4 @@
 from datetime import datetime
-from json import dumps
 from logging import getLogger, basicConfig, DEBUG, INFO, WARNING, FileHandler, Formatter, Filter
 from pathlib import Path
 
