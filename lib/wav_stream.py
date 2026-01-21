@@ -90,10 +90,17 @@ async def stream_pcm_to_queue_realtime(
       - 0.5 = 2x faster
       - 0.0 = no pacing sleep (still chunked)
     """
+
+    cnt = 0
     for chunk in pcm_chunks:
         if running is not None and not running.is_set():
             break
         await audio_queue.put(chunk)
+        cnt += 1
+
+        if cnt % 20 == 0:
+            print(f"Sent chunk {cnt}...", flush=True)
+
         if realtime_factor > 0:
             await asyncio.sleep((chunk_ms / 1000.0) * realtime_factor)
 

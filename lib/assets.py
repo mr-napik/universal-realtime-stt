@@ -11,7 +11,7 @@ class AssetPair:
     txt: Path
 
 
-def iter_wav_txt_pairs(assets_dir: Path) -> Iterator[AssetPair]:
+def get_test_files(assets_dir: Path) -> Iterator[AssetPair]:
     """
     Iterate over *.wav files in assets_dir (recursively),
     yielding (wav, txt) pairs where txt has same basename.

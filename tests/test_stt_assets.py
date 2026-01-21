@@ -5,11 +5,13 @@ import os
 import unittest
 from pathlib import Path
 from typing import List
+from logging import getLogger
 
 from config import AUDIO_SAMPLE_RATE
-from lib.assets import iter_wav_txt_pairs
+from lib.assets import get_test_files
 from lib.stt import init_stt_once
 from lib.wav_stream import iter_wav_pcm_chunks, stream_pcm_to_queue_realtime
+from lib.utils import setup_logging
 
 
 # Real-time-ish streaming parameters
@@ -19,6 +21,9 @@ POST_ROLL_SILENCE_S = 2.0 # allow VAD to commit final segment
 MAX_COLLECT_IDLE_S = 2.0  # idle window after stop
 
 
+
+setup_logging()
+logger = getLogger(__name__)
 
 
 def _normalize_text(s: str) -> str:
@@ -78,9 +83,9 @@ class TestSttAssets(unittest.IsolatedAsyncioTestCase):
         post_roll_silence_s = float(os.getenv("STT_TEST_POST_ROLL_SILENCE_SILENCE_S", "2.0"))
         idle_after_stop_s = float(os.getenv("STT_TEST_IDLE_AFTER_STOP_S", "2.0"))
 
-        pairs = list(iter_wav_txt_pairs(assets_dir))
+        pairs = list(get_test_files(assets_dir))
         if not pairs:
-            self.skipTest(f"No .wav assets found in {assets_dir}")
+            assert False, "Found no files to test. Requires wav/txt pair in assets/."
 
         for pair in pairs:
             with self.subTest(asset=pair.wav.name, msg=pair.wav.name):

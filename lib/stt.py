@@ -1,7 +1,7 @@
 import asyncio
 import base64
 from json import loads, dumps
-from typing import Optional
+from typing import Optional, List
 from logging import getLogger
 from time import time
 
@@ -308,80 +308,76 @@ async def receive_audio_from_client(ws: WebSocket, audio_queue: asyncio.Queue[Op
 # Transcript Ingest Loop
 # ---------------------------------------------------------------------------
 #
-# async def drain_transcript_queue(
-#         queue: asyncio.Queue[Optional[str]],
-#         app_running: asyncio.Event,
-# ) -> Optional[str]:
-#     """
-#     Drain all available transcripts from queue.
-#
-#     Returns:
-#         - None: Stop signal received
-#         - "": Queue was empty or only whitespace
-#         - str: Combined transcript text
-#     """
-#     texts = []
-#     try:
-#         first = await queue.get()
-#         if first is None:
-#             return None  # Stop signal
-#
-#         texts.append(first)
-#         while app_running.is_set():
-#             item = queue.get_nowait()
-#             if item is None:
-#                 return None  # Stop signal mid-stream
-#             texts.append(item)
-#     except asyncio.QueueEmpty:
-#         pass  # Drained all available
-#
-#     result = "\n".join(texts).strip()
-#     if texts:
-#         logger.debug("[INGEST] Drained %d items: %r", len(texts), result[:100])
-#     return result
-#
-#
-# async def transcript_ingest_step(
-#         ctx: TaskContext,
-#         transcript_queue: asyncio.Queue[Optional[str]],
-# ) -> bool:
-#     """
-#     Process one batch of transcripts.
-#
-#     Returns False if should stop, True to continue.
-#     """
-#     text = await drain_transcript_queue(transcript_queue, ctx.state.app_running)
-#
-#     if text is None:
-#         logger.info("[INGEST] Received stop signal.")
-#         return False
-#
-#     if not text:
-#         return True  # Empty batch, continue
-#
-#     # TODO: STT duration unknown in current pipeline
-#     await ctx.state.convo_log.add_user_utterance(text, duration=0.0)
-#     ctx.state.new_user_turn.set()
-#     return True
-#
-#
-# async def transcript_ingest_loop(
-#         ctx: TaskContext,
-#         transcript_queue: asyncio.Queue[Optional[str]],
-# ) -> None:
-#     """Ingest STT transcripts into ConversationLog."""
-#     logger.info("[%s] Started.", ctx.log_name)
-#     try:
-#         while ctx.is_running:
-#             should_continue = await transcript_ingest_step(ctx, transcript_queue)
-#             if not should_continue:
-#                 break
-#     except asyncio.CancelledError:
-#         logger.info("[%s] Cancelled.", ctx.log_name)
-#         raise
-#     except Exception as e:
-#         logger.exception("[%s] Crashed: %r", ctx.log_name, e)
-#     finally:
-#         ctx.shutdown()
-#         logger.info("[%s] Exiting.", ctx.log_name)
+async def drain_transcript_queue(
+        queue: asyncio.Queue[Optional[str]],
+        app_running: asyncio.Event,
+) -> Optional[str]:
+    """
+    Drain all available transcripts from queue.
 
+    Returns:
+        - None: Stop signal received
+        - "": Queue was empty or only whitespace
+        - str: Combined transcript text
+    """
+    texts = []
+    try:
+        first = await queue.get()
+        if first is None:
+            return None  # Stop signal
+
+        texts.append(first)
+        while app_running.is_set():
+            item = queue.get_nowait()
+            if item is None:
+                return None  # Stop signal mid-stream
+            texts.append(item)
+    except asyncio.QueueEmpty:
+        pass  # Drained all available
+
+    result = "\n".join(texts).strip()
+    if texts:
+        logger.debug("[INGEST] Drained %d items: %r", len(texts), result[:100])
+    return result
+
+
+async def transcript_ingest_step(
+        app_running: asyncio.Event,
+        transcript_queue: asyncio.Queue[Optional[str]],
+        result: List[str],
+) -> bool:
+    """
+    Process one batch of transcripts.
+
+    Returns False if should stop, True to continue.
+    """
+    text = await drain_transcript_queue(transcript_queue, app_running)
+
+    if text is None:
+        logger.info("[INGEST] Received stop signal.")
+        return False
+
+    if not text:
+        return True  # Empty batch, continue
+
+    print("[INGEST] Received:", text)
+    result.append(text)
+    return True
+
+
+async def transcript_ingest_loop(
+        app_running: asyncio.Event,
+        transcript_queue: asyncio.Queue[Optional[str]],
+        result: List[str],
+) -> None:
+    """Ingest STT transcripts into ConversationLog."""
+    try:
+        while app_running.is_set():
+            should_continue = await transcript_ingest_step(app_running, transcript_queue, result)
+            if not should_continue:
+                break
+    except asyncio.CancelledError:
+        logger.info("Cancelled.")
+        raise
+    except Exception as e:
+        logger.exception("Crashed: %r", e)
