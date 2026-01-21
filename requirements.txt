@@ -5,3 +5,4 @@ elevenlabs>=2.31.0
 python-dotenv>=1.2.1
 mutagen>=1.47.0
 pytest>=9.0.2
+diff-match-patch

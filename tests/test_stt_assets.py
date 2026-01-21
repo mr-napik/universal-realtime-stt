@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import unittest
 from pathlib import Path
 from typing import List
 from logging import getLogger
 
-from config import AUDIO_SAMPLE_RATE
+from config import AUDIO_SAMPLE_RATE, CHUNK_MS, STT_TEST_REALTIME_FACTOR, LOG_PATH
 from lib.assets import get_test_files
 from lib.stt import init_stt_once, transcript_ingest_loop
 from lib.wav_stream import iter_wav_pcm_chunks, stream_pcm_to_queue_realtime
 from lib.utils import setup_logging
+from lib.diff_report import write_diff_html
 
 
 setup_logging()
@@ -40,9 +40,9 @@ class TestSttAssets(unittest.IsolatedAsyncioTestCase):
         repo_root = Path(__file__).resolve().parents[1]
         assets_dir = repo_root / "assets"
 
-        chunk_ms = int(os.getenv("STT_TEST_CHUNK_MS", "20"))
-        realtime_factor = float(os.getenv("STT_TEST_REALTIME_FACTOR", "1.0"))
-        post_roll_silence_s = float(os.getenv("STT_TEST_POST_ROLL_SILENCE_S", "2.0"))
+        chunk_ms = CHUNK_MS
+        realtime_factor = STT_TEST_REALTIME_FACTOR
+        post_roll_silence_s = 2.0
 
         pairs = list(get_test_files(assets_dir))
         if not pairs:
@@ -68,6 +68,8 @@ class TestSttAssets(unittest.IsolatedAsyncioTestCase):
                         expected_channels=1,
                         expected_sample_width_bytes=2,
                     )
+
+                    # this actually starts streaming chunks and runs test
                     await stream_pcm_to_queue_realtime(
                         pcm_chunks,
                         audio_queue,
@@ -91,13 +93,18 @@ class TestSttAssets(unittest.IsolatedAsyncioTestCase):
 
                 got = _normalize_text(" ".join(segments))
 
-                self.assertEqual(
-                    got,
-                    expected,
-                    msg=(
-                        f"Transcript mismatch for {pair.wav.name}\n\n"
-                        f"EXPECTED:\n{expected}\n\n"
-                        f"GOT:\n{got}\n\n"
-                        f"SEGMENTS:\n{segments}\n"
-                    ),
-                )
+                # evaluate result
+                if got != expected:
+                    report_path = LOG_PATH / f"{pair.wav.stem}.diff.html"
+                    report = write_diff_html(
+                        expected=expected,
+                        got=got,
+                        out_path=report_path,
+                        title=f"{pair.wav.name}",
+                        context_hint=f"Asset: {pair.wav}\nExpected: {pair.txt}\n",
+                    )
+
+                    self.fail(
+                        f"Transcript mismatch for {pair.wav.name}\n"
+                        f"Diff report written to: {report.html_path}\n"
+                    )
