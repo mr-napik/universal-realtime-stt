@@ -5,7 +5,8 @@ import wave
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator, Optional
-
+from lib.stt import _make_silence_chunk
+from config import AUDIO_SAMPLE_RATE
 
 @dataclass(frozen=True)
 class WavFormat:
@@ -104,9 +105,13 @@ async def stream_pcm_to_queue_realtime(
         if realtime_factor > 0:
             await asyncio.sleep((chunk_ms / 1000.0) * realtime_factor)
 
-    # allow provider/VAD to finalize "committed" transcript
-    if post_roll_silence_s > 0:
-        if realtime_factor > 0:
-            await asyncio.sleep(post_roll_silence_s * realtime_factor)
-        else:
-            await asyncio.sleep(0)
+    # allow provider/VAD to finalize "committed" transcript by sending silence...
+    tot = 0.0
+    while tot < post_roll_silence_s:
+        chunk = _make_silence_chunk(AUDIO_SAMPLE_RATE, chunk_ms/1000.0)
+        await audio_queue.put(chunk)
+        await asyncio.sleep((chunk_ms / 1000.0) * realtime_factor)
+        tot += chunk_ms/1000.0
+
+    # cleanly close - this is important
+    await audio_queue.put(None)

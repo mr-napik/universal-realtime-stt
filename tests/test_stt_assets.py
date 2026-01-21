@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import List
 from logging import getLogger
 
-from config import AUDIO_SAMPLE_RATE, CHUNK_MS, STT_TEST_REALTIME_FACTOR, LOG_PATH
+from config import AUDIO_SAMPLE_RATE, CHUNK_MS, STT_TEST_REALTIME_FACTOR, TMP_PATH
 from lib.assets import get_test_files
 from lib.stt import init_stt_once, transcript_ingest_loop
 from lib.wav_stream import iter_wav_pcm_chunks, stream_pcm_to_queue_realtime
@@ -60,30 +60,31 @@ class TestSttAssets(unittest.IsolatedAsyncioTestCase):
                 stt_task = asyncio.create_task(init_stt_once(audio_queue, transcript_queue, running))
                 ingest_task = asyncio.create_task(_ingest_transcripts_using_lib(running, transcript_queue))
 
-                try:
-                    pcm_chunks = iter_wav_pcm_chunks(
-                        pair.wav,
-                        chunk_ms=chunk_ms,
-                        expected_sample_rate=AUDIO_SAMPLE_RATE,
-                        expected_channels=1,
-                        expected_sample_width_bytes=2,
-                    )
 
-                    # this actually starts streaming chunks and runs test
-                    await stream_pcm_to_queue_realtime(
-                        pcm_chunks,
-                        audio_queue,
-                        chunk_ms=chunk_ms,
-                        realtime_factor=realtime_factor,
-                        post_roll_silence_s=post_roll_silence_s,
-                        running=running,
-                    )
-                finally:
-                    # Stop STT sender cleanly.
-                    await audio_queue.put(None)
+                pcm_chunks_iterator = iter_wav_pcm_chunks(
+                    pair.wav,
+                    chunk_ms=chunk_ms,
+                    expected_sample_rate=AUDIO_SAMPLE_RATE,
+                    expected_channels=1,
+                    expected_sample_width_bytes=2,
+                )
+
+                # this actually starts streaming chunks to the queue and runs test (as other tasks are already waiting)
+                await stream_pcm_to_queue_realtime(
+                    pcm_chunks_iterator,
+                    audio_queue,
+                    chunk_ms=chunk_ms,
+                    realtime_factor=realtime_factor,
+                    post_roll_silence_s=post_roll_silence_s,
+                    running=running,
+                )
+
 
                 # Ensure STT session ends.
                 await stt_task
+
+                # give some time to STT and transcript collection to wrap up.
+                await asyncio.sleep(post_roll_silence_s * 2)
 
                 # Stop ingest loop and collect drained transcripts.
                 await transcript_queue.put(None)
@@ -95,7 +96,7 @@ class TestSttAssets(unittest.IsolatedAsyncioTestCase):
 
                 # evaluate result
                 if got != expected:
-                    report_path = LOG_PATH / f"{pair.wav.stem}.diff.html"
+                    report_path = TMP_PATH / f"{pair.wav.stem}.diff.html"
                     report = write_diff_html(
                         expected=expected,
                         got=got,

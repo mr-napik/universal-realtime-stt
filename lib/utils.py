@@ -34,18 +34,12 @@ def setup_logging() -> Path:
 
     Returns the path to the log file.
     """
-    if LOG_LEVEL == "PROD":
-        # Production: your code = INFO+, third-party = WARNING+
-        basicConfig(level=WARNING, format=_LOG_FORMAT)
-        getLogger("app").setLevel(INFO)
-        # TODO: verify that we log info on PROD for all app code
-    else:
-        # Development: verbose logging for this app, except 3rd party libs
-        basicConfig(level=DEBUG, format=_LOG_FORMAT)
-        getLogger("websockets.client").setLevel(INFO)
-        getLogger("httpcore").setLevel(INFO)
-        getLogger("urllib3").setLevel(INFO)
-        getLogger("google").setLevel(INFO)
+    # Development: verbose logging for this app, except 3rd party libs
+    basicConfig(level=DEBUG, format=_LOG_FORMAT)
+    getLogger("websockets.client").setLevel(INFO)
+    getLogger("httpcore").setLevel(INFO)
+    getLogger("urllib3").setLevel(INFO)
+    getLogger("google").setLevel(INFO)
 
     # File handler: DEBUG for project code, INFO for 3rd party
     log_filename = LOG_PATH / f"app_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
