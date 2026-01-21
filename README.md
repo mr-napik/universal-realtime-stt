@@ -34,8 +34,21 @@ Then restart Idea and check that the terminal automatically opens to (.venv). Th
 
 Then install dependencies from requirements.
 
+
+
 ## Asset Sources
 - https://www.pametnaroda.cz/cs/archive
 - https://youtu.be/Der9UHsGinI
 - https://youtu.be/DA6mbcmEZPc
 - https://ceskepodcasty.cz/podcast/senior-life-podcast
+
+### Converting Assets to WAV (on Mac)
+
+Most STT for example Eleven Labs expect PCM16000 mono:
+```
+afconvert files.mp3 output.wav -f WAVE -d LEI16 -r 16000 -c 1
+```
+or
+```
+ffmpeg -i input.mp3 -ac 1 -ar 16000 -c:a pcm_s16le output.wav
+```

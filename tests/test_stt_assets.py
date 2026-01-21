@@ -1,32 +1,26 @@
 import asyncio
-import os
-import shutil
-import subprocess
 from pathlib import Path
-from typing import Iterable, List, Tuple
+from typing import List, Tuple
 
 import pytest
 
 from lib.stt import init_stt_once
-from config import AUDIO_SAMPLE_RATE
+from config import AUDIO_SAMPLE_RATE, ASSETS_DIR
 
 
-ASSETS_DIR = Path(__file__).resolve().parents[1] / "assets"
 
 # Real-time-ish streaming parameters
-CHUNK_MS = int(os.getenv("STT_TEST_CHUNK_MS", "20"))  # 20ms chunks is common
-REALTIME_FACTOR = float(os.getenv("STT_TEST_REALTIME_FACTOR", "1.0"))  # 1.0 = realtime, 0.0 = as fast as possible
-POST_ROLL_SILENCE_S = float(os.getenv("STT_TEST_POST_ROLL_SILENCE_S", "2.0"))  # allow VAD to commit final segment
-MAX_COLLECT_IDLE_S = float(os.getenv("STT_TEST_MAX_COLLECT_IDLE_S", "2.0"))  # idle window after stop
+CHUNK_MS = 200  # 200ms chunks is common
+REALTIME_FACTOR = 1.0   # 1.0 = realtime, 0.0 = as fast as possible
+POST_ROLL_SILENCE_S = 2.0 # allow VAD to commit final segment
+MAX_COLLECT_IDLE_S = 2.0  # idle window after stop
 
 
 def _list_audio_assets() -> List[Path]:
     if not ASSETS_DIR.exists():
-        return []
-    files = []
-    for ext in (".wav", ".mp3"):
-        files.extend(sorted(ASSETS_DIR.rglob(f"*{ext}")))
-    return files
+        assert False
+
+    return sorted(ASSETS_DIR.glob("*.wav"))
 
 
 def _expected_txt_for(audio_path: Path) -> Path:
@@ -36,45 +30,6 @@ def _expected_txt_for(audio_path: Path) -> Path:
 def _normalize_text(s: str) -> str:
     # Keep this conservative; adjust if you want more forgiving matching.
     return " ".join(s.strip().split())
-
-
-def _ffmpeg_available() -> bool:
-    return shutil.which("ffmpeg") is not None
-
-
-def _decode_to_pcm_s16le_mono_16k(audio_path: Path) -> bytes:
-    """
-    Convert arbitrary wav/mp3 to PCM s16le mono @ AUDIO_SAMPLE_RATE.
-    Uses ffmpeg for consistent decoding/resampling across formats.
-
-    Returns raw PCM bytes (little-endian int16 samples).
-    """
-    if not _ffmpeg_available():
-        raise RuntimeError(
-            "ffmpeg not found in PATH. Install ffmpeg or adjust the test to only use compatible WAV files."
-        )
-
-    cmd = [
-        "ffmpeg",
-        "-hide_banner",
-        "-loglevel",
-        "error",
-        "-i",
-        str(audio_path),
-        "-f",
-        "s16le",
-        "-acodec",
-        "pcm_s16le",
-        "-ac",
-        "1",
-        "-ar",
-        str(AUDIO_SAMPLE_RATE),
-        "pipe:1",
-    ]
-    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if proc.returncode != 0:
-        raise RuntimeError(f"ffmpeg failed for {audio_path.name}: {proc.stderr.decode('utf-8', errors='replace')}")
-    return proc.stdout
 
 
 async def _producer_stream_pcm(
