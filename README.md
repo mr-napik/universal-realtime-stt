@@ -42,11 +42,13 @@ Then install dependencies from requirements.
 - https://youtu.be/DA6mbcmEZPc
 - https://ceskepodcasty.cz/podcast/senior-life-podcast
 
+The sample file is taken from here: https://www.pametnaroda.cz/cs/vodicka-adolf-1913
+
 ### Converting Assets to WAV (on Mac)
 
 Most STT for example Eleven Labs expect PCM16000 mono:
 ```
-afconvert files.mp3 output.wav -f WAVE -d LEI16 -r 16000 -c 1
+afconvert input.mp3 output.wav -f WAVE -d LEI16@16000 -c 1 -v
 ```
 or
 ```

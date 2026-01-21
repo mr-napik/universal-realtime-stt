@@ -1,12 +1,15 @@
+from __future__ import annotations
+
 import asyncio
+import os
+import unittest
 from pathlib import Path
-from typing import List, Tuple
+from typing import List
 
-import pytest
-
+from config import AUDIO_SAMPLE_RATE
+from lib.assets import iter_wav_txt_pairs
 from lib.stt import init_stt_once
-from config import AUDIO_SAMPLE_RATE, ASSETS_DIR
-
+from lib.wav_stream import iter_wav_pcm_chunks, stream_pcm_to_queue_realtime
 
 
 # Real-time-ish streaming parameters
@@ -16,155 +19,115 @@ POST_ROLL_SILENCE_S = 2.0 # allow VAD to commit final segment
 MAX_COLLECT_IDLE_S = 2.0  # idle window after stop
 
 
-def _list_audio_assets() -> List[Path]:
-    if not ASSETS_DIR.exists():
-        assert False
-
-    return sorted(ASSETS_DIR.glob("*.wav"))
-
-
-def _expected_txt_for(audio_path: Path) -> Path:
-    return audio_path.with_suffix(".txt")
 
 
 def _normalize_text(s: str) -> str:
-    # Keep this conservative; adjust if you want more forgiving matching.
+    # Conservative normalizer; adjust in one place if needed.
     return " ".join(s.strip().split())
 
 
-async def _producer_stream_pcm(
-        pcm: bytes,
-        audio_queue: asyncio.Queue,
-        running: asyncio.Event,
-) -> None:
-    """
-    Feed PCM into the audio_queue in paced chunks to mimic realtime streaming.
-    """
-    bytes_per_sample = 2  # s16le
-    samples_per_chunk = int(AUDIO_SAMPLE_RATE * (CHUNK_MS / 1000.0))
-    chunk_size = samples_per_chunk * bytes_per_sample
-
-    # stream audio
-    for i in range(0, len(pcm), chunk_size):
-        if not running.is_set():
-            break
-        await audio_queue.put(pcm[i : i + chunk_size])
-
-        if REALTIME_FACTOR > 0:
-            await asyncio.sleep((CHUNK_MS / 1000.0) * REALTIME_FACTOR)
-
-    # post-roll silence time so VAD can commit final transcript
-    if running.is_set() and POST_ROLL_SILENCE_S > 0:
-        if REALTIME_FACTOR > 0:
-            await asyncio.sleep(POST_ROLL_SILENCE_S * REALTIME_FACTOR)
-        else:
-            # still give the event loop a chance
-            await asyncio.sleep(0.0)
-
-
-async def _collector(
+async def _collect_committed_transcripts(
         transcript_queue: asyncio.Queue,
         running: asyncio.Event,
+        *,
+        idle_after_stop_s: float = 2.0,
 ) -> List[str]:
     """
-    Collect committed transcripts until 'running' is cleared and the queue stays idle for a bit.
+    Collect committed transcript segments from transcript_queue.
+
+    Behavior:
+      - while running: wait for items
+      - after running cleared: stop once queue remains idle for idle_after_stop_s
     """
     out: List[str] = []
+    loop = asyncio.get_running_loop()
     idle_deadline = None
 
     while True:
         try:
-            item = await asyncio.wait_for(transcript_queue.get(), timeout=0.2)
+            item = await asyncio.wait_for(transcript_queue.get(), timeout=0.25)
             if item is None:
                 continue
-            out.append(item)
-            idle_deadline = None  # reset idle detection on activity
+            out.append(str(item))
+            idle_deadline = None
         except asyncio.TimeoutError:
             if running.is_set():
                 continue
 
-            # after stop: wait until the queue is idle for MAX_COLLECT_IDLE_S
             if idle_deadline is None:
-                idle_deadline = asyncio.get_event_loop().time() + MAX_COLLECT_IDLE_S
+                idle_deadline = loop.time() + idle_after_stop_s
 
-            if asyncio.get_event_loop().time() >= idle_deadline:
+            if loop.time() >= idle_deadline:
                 break
 
     return out
 
 
-def _make_param_list() -> List[Tuple[Path, Path]]:
-    assets = _list_audio_assets()
-    params: List[Tuple[Path, Path]] = []
-    for audio in assets:
-        expected = _expected_txt_for(audio)
-        if expected.exists():
-            params.append((audio, expected))
-    return params
-
-
-PARAMS = _make_param_list()
-
-
-@pytest.mark.parametrize(
-    "audio_path, expected_txt",
-    PARAMS,
-    ids=lambda p: getattr(p, "name", str(p)),
-)
-@pytest.mark.asyncio
-async def test_assets_stream_to_stt_and_match_expected(audio_path: Path, expected_txt: Path) -> None:
+class TestSttAssets(unittest.IsolatedAsyncioTestCase):
     """
-    One test per asset file: stream audio -> collect committed transcripts -> compare to expected .txt
+    One test method, multiple subtests (one per asset).
+    Plays nicely in IntelliJ/IDEA.
     """
-    expected = _normalize_text(expected_txt.read_text(encoding="utf-8"))
 
-    # decode to PCM the STT session expects
-    pcm = _decode_to_pcm_s16le_mono_16k(audio_path)
+    async def test_assets_wav_streaming_matches_expected_txt(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        assets_dir = repo_root / "assets"
 
-    audio_queue: asyncio.Queue = asyncio.Queue(maxsize=200)
-    transcript_queue: asyncio.Queue = asyncio.Queue(maxsize=200)
-    running = asyncio.Event()
-    running.set()
+        chunk_ms = int(os.getenv("STT_TEST_CHUNK_MS", "20"))
+        realtime_factor = float(os.getenv("STT_TEST_REALTIME_FACTOR", "1.0"))
+        post_roll_silence_s = float(os.getenv("STT_TEST_POST_ROLL_SILENCE_SILENCE_S", "2.0"))
+        idle_after_stop_s = float(os.getenv("STT_TEST_IDLE_AFTER_STOP_S", "2.0"))
 
-    stt_task = asyncio.create_task(init_stt_once(audio_queue, transcript_queue, running))
-    collector_task = asyncio.create_task(_collector(transcript_queue, running))
+        pairs = list(iter_wav_txt_pairs(assets_dir))
+        if not pairs:
+            self.skipTest(f"No .wav assets found in {assets_dir}")
 
-    try:
-        await _producer_stream_pcm(pcm, audio_queue, running)
-    finally:
-        # stop the STT session after streaming finishes
-        running.clear()
+        for pair in pairs:
+            with self.subTest(asset=pair.wav.name, msg=pair.wav.name):
+                expected = _normalize_text(pair.txt.read_text(encoding="utf-8"))
 
-    # wait for session and transcript ingest to settle
-    await stt_task
-    committed_segments = await collector_task
+                audio_queue: asyncio.Queue = asyncio.Queue(maxsize=200)
+                transcript_queue: asyncio.Queue = asyncio.Queue(maxsize=200)
+                running = asyncio.Event()
+                running.set()
 
-    got = _normalize_text(" ".join(committed_segments))
+                stt_task = asyncio.create_task(init_stt_once(audio_queue, transcript_queue, running))
+                collector_task = asyncio.create_task(
+                    _collect_committed_transcripts(transcript_queue, running, idle_after_stop_s=idle_after_stop_s)
+                )
 
-    assert got == expected, (
-        f"Transcript mismatch for {audio_path.name}\n\n"
-        f"EXPECTED:\n{expected}\n\n"
-        f"GOT:\n{got}\n\n"
-        f"SEGMENTS:\n{committed_segments}\n"
-    )
+                try:
+                    pcm_chunks = iter_wav_pcm_chunks(
+                        pair.wav,
+                        chunk_ms=chunk_ms,
+                        expected_sample_rate=AUDIO_SAMPLE_RATE,
+                        expected_channels=1,
+                        expected_sample_width_bytes=2,
+                    )
+                    await stream_pcm_to_queue_realtime(
+                        pcm_chunks,
+                        audio_queue,
+                        chunk_ms=chunk_ms,
+                        realtime_factor=realtime_factor,
+                        post_roll_silence_s=post_roll_silence_s,
+                        running=running,
+                    )
+                finally:
+                    running.clear()
 
+                # ensure STT session ends and we collected tail commits
+                await stt_task
+                segments = await collector_task
 
-def test_assets_present_or_skipped() -> None:
-    """
-    Guardrail: if there are audio files but no matching .txt files, fail loudly.
-    """
-    assets = _list_audio_assets()
-    if not assets:
-        pytest.skip("No assets/*.wav or assets/*.mp3 found.")
+                got = _normalize_text(" ".join(segments))
 
-    matched = set(a for a, _ in PARAMS)
-    missing = [a for a in assets if _expected_txt_for(a).exists() and a not in matched]
-    # (currently PARAMS already includes expected exists; this is just future-proof)
-    if missing:
-        pytest.fail(f"Some assets had .txt but were not picked up: {[p.name for p in missing]}")
-
-    if not PARAMS:
-        pytest.fail(
-            "Found audio assets, but none had matching .txt files (same basename). "
-            "Example: assets/foo.wav + assets/foo.txt"
-        )
+                self.assertEqual(
+                    got,
+                    expected,
+                    msg=(
+                        f"Transcript mismatch for {pair.wav.name}\n\n"
+                        f"EXPECTED:\n{expected}\n\n"
+                        f"GOT:\n{got}\n\n"
+                        f"SEGMENTS:\n{segments}\n"
+                    ),
+                )
