@@ -1,5 +1,6 @@
-# secrets file
+# secrets files
 .env*
+stt-test-*.json
 
 # temp
 tmp/
@@ -218,6 +219,6 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 .idea/
 
-# google cloud
+# google cloud documentation and project
 .gcloud/
 cloudrun.config.md

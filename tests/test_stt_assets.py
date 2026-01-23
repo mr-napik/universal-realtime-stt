@@ -12,6 +12,7 @@ from lib.diff_report import write_diff_html
 from lib.stt import transcript_ingest_loop, init_stt_once_provider
 from lib.stt_provider import RealtimeSttProvider
 from lib.stt_provider_elevenlabs import ElevenLabsRealtimeProvider
+from lib.stt_provider_google import GoogleRealtimeProvider
 from lib.utils import setup_logging
 from lib.wav_stream import iter_wav_pcm_chunks, stream_pcm_to_queue_realtime
 
@@ -20,6 +21,7 @@ logger = getLogger(__name__)
 
 
 def _normalize_text(s: str) -> str:
+    """Normalize text for comparison (currently only whitespace)."""
     return " ".join(s.strip().split())
 
 
@@ -39,6 +41,8 @@ async def _ingest_transcripts_using_lib(
 class TestSttAssets(unittest.IsolatedAsyncioTestCase):
     async def _runner(self, provider: RealtimeSttProvider) -> None:
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')  # make sure all reports from run has same timestamp
+        ts += "_" + provider.__class__.__name__
+
         pairs = list(get_test_files(ASSETS_DIR))
         if not pairs:
             assert False, f"Found no files to test. Requires at least one wav/txt pair in {ASSETS_DIR}."
@@ -77,7 +81,8 @@ class TestSttAssets(unittest.IsolatedAsyncioTestCase):
                 await stt_task
 
                 # give some time to STT and transcript collection to wrap up (in addition to silence).
-                await asyncio.sleep(FINAL_SILENCE_S)
+                # at least for eleven labs, we need this to be longer, otherwise we cna miss quite a lot.
+                await asyncio.sleep(FINAL_SILENCE_S * 2)
 
                 # Stop ingest loop and collect drained transcripts.
                 await transcript_queue.put(None)
@@ -98,11 +103,10 @@ class TestSttAssets(unittest.IsolatedAsyncioTestCase):
                         context_hint=f"Asset: {pair.wav}\nExpected: {pair.txt}\n",
                     )
 
-                    character_error_rate = round(float(report.levenshtein) / len(expected) * 100, 1)
-                    print(f"{pair.wav.name} error rate: {character_error_rate:.1f}%")
-                    if character_error_rate > 5:
+                    print(f"{pair.wav.name} error rate: {report.character_error_rate:.1f}%")
+                    if report.character_error_rate > 5.0:
                         self.fail(
-                            f"{pair.wav.name} error rate: {character_error_rate:.1f}%\n"
+                            f"{pair.wav.name} error rate: {report.character_error_rate:.1f}%\n"
                             f"Transcript mismatch for {pair.wav.name}\n"
                             f"Diff report written to: {report.html_path}\n"
                         )
@@ -110,6 +114,9 @@ class TestSttAssets(unittest.IsolatedAsyncioTestCase):
                     print("Exact match! Wow!")
 
     async def test_eleven_labs(self) -> None:
-        # default provider stays ElevenLabs (backportable)
         provider = ElevenLabsRealtimeProvider()
+        await self._runner(provider)
+
+    async def test_google(self) -> None:
+        provider = GoogleRealtimeProvider()
         await self._runner(provider)
