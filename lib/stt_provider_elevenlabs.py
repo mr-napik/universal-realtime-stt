@@ -24,11 +24,6 @@ from lib.stt_provider import RealtimeSttProvider, TranscriptEvent
 logger = getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# STT constants
-# ---------------------------------------------------------------------------
-
-
 STT_MSG_SESSION_STARTED = "session_started"
 STT_MSG_PARTIAL_TRANSCRIPT = "partial_transcript"
 STT_MSG_COMMITTED_TRANSCRIPT = "committed_transcript"

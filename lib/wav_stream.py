@@ -5,7 +5,7 @@ import wave
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator, Optional
-from lib.stt import _make_silence_chunk
+from lib.utils import _make_silence_chunk
 from config import AUDIO_SAMPLE_RATE
 
 @dataclass(frozen=True)

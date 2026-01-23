@@ -2,18 +2,18 @@ from __future__ import annotations
 
 import asyncio
 import unittest
+from datetime import datetime
+from logging import getLogger
 from pathlib import Path
 from typing import List
-from logging import getLogger
-from datetime import datetime
 
 from config import AUDIO_SAMPLE_RATE, CHUNK_MS, STT_TEST_REALTIME_FACTOR, TMP_PATH
 from lib.assets import get_test_files
-from lib.stt import init_stt_once, transcript_ingest_loop
-from lib.wav_stream import iter_wav_pcm_chunks, stream_pcm_to_queue_realtime
-from lib.utils import setup_logging
 from lib.diff_report import write_diff_html
-
+from lib.stt import transcript_ingest_loop, init_stt_once_provider
+from lib.stt_provider_elevenlabs import ElevenLabsRealtimeProvider
+from lib.utils import setup_logging
+from lib.wav_stream import iter_wav_pcm_chunks, stream_pcm_to_queue_realtime
 
 setup_logging()
 logger = getLogger(__name__)
@@ -47,6 +47,9 @@ class TestSttAssets(unittest.IsolatedAsyncioTestCase):
         realtime_factor = STT_TEST_REALTIME_FACTOR
         post_roll_silence_s = 2.0
 
+        # default provider stays ElevenLabs (backportable)
+        provider = ElevenLabsRealtimeProvider()
+
         pairs = list(get_test_files(assets_dir))
         if not pairs:
             assert False, "Found no files to test. Requires wav/txt pair in assets/."
@@ -60,9 +63,8 @@ class TestSttAssets(unittest.IsolatedAsyncioTestCase):
                 running = asyncio.Event()
                 running.set()
 
-                stt_task = asyncio.create_task(init_stt_once(audio_queue, transcript_queue, running))
+                stt_task = asyncio.create_task(init_stt_once_provider(provider, audio_queue, transcript_queue, running))
                 ingest_task = asyncio.create_task(_ingest_transcripts_using_lib(running, transcript_queue))
-
 
                 pcm_chunks_iterator = iter_wav_pcm_chunks(
                     pair.wav,
@@ -81,7 +83,6 @@ class TestSttAssets(unittest.IsolatedAsyncioTestCase):
                     post_roll_silence_s=post_roll_silence_s,
                     running=running,
                 )
-
 
                 # Ensure STT session ends.
                 await stt_task
@@ -108,7 +109,7 @@ class TestSttAssets(unittest.IsolatedAsyncioTestCase):
                         context_hint=f"Asset: {pair.wav}\nExpected: {pair.txt}\n",
                     )
 
-                    character_error_rate=round(float(report.levenshtein)/len(expected)*100, 1)
+                    character_error_rate = round(float(report.levenshtein) / len(expected) * 100, 1)
                     print(f"{pair.wav.name} error rate: {character_error_rate:.1f}%")
                     if character_error_rate > 5:
                         self.fail(

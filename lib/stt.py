@@ -1,62 +1,12 @@
 import asyncio
-import base64
-from json import loads, dumps
-from typing import Optional, List
 from logging import getLogger
-from time import time
+from typing import Optional, List
 
 from fastapi import WebSocket, WebSocketDisconnect
-from websockets import connect, ConnectionClosedOK
 
-from lib.stt_provider import RealtimeSttProvider, TranscriptEvent
-from lib.stt_provider_elevenlabs import ElevenLabsRealtimeProvider
-
+from lib.stt_provider import RealtimeSttProvider
 
 logger = getLogger(__name__)
-
-
-
-# ---------------------------------------------------------------------------
-# STT helpers
-# ---------------------------------------------------------------------------
-
-
-def _make_silence_chunk(sample_rate: int, duration_s: float = 0.1) -> bytes:
-    """Create a silence audio chunk of given duration."""
-    return b"\x00\x00" * int(sample_rate * duration_s)
-
-
-async def _stt_send_audio_task(
-    stt_ws,
-    audio_queue: asyncio.Queue[Optional[bytes]],
-    conversation_running: asyncio.Event,
-    sample_rate: int,
-) -> None:
-    """Send audio chunks from queue to STT WebSocket."""
-    silence_chunk = _make_silence_chunk(sample_rate)
-
-    try:
-        while conversation_running.is_set():
-            try:
-                chunk = await asyncio.wait_for(audio_queue.get(), timeout=0.2)
-            except asyncio.TimeoutError:
-                chunk = silence_chunk
-
-            if chunk is None:
-                break
-
-            payload = {
-                "message_type": "input_audio_chunk",
-                "audio_base_64": base64.b64encode(chunk).decode("ascii"),
-                "sample_rate": sample_rate,
-            }
-            await stt_ws.send(dumps(payload))
-    except Exception as e:
-        # @TODO: catch known correct termination exceptions and log as info, rest as exception
-        # @TODO: catch known bad exceptions (out of quota and propagate them/stop convo - there is no point in retrying.
-        logger.warning("[STT] _stt_send_audio stopped: %r", e)
-    finally:
-        logger.info("[STT] _stt_send_audio finished.")
 
 
 # ---------------------------------------------------------------------------
@@ -105,56 +55,6 @@ async def init_stt_once_provider(
         )
         for t in pending:
             t.cancel()
-
-
-async def init_stt_once(
-        audio_queue: asyncio.Queue[Optional[bytes]],
-        transcript_queue: asyncio.Queue[Optional[str]],
-        conversation_running: asyncio.Event,
-) -> None:
-    # default provider stays ElevenLabs (backportable)
-    provider = ElevenLabsRealtimeProvider()
-    await init_stt_once_provider(provider, audio_queue, transcript_queue, conversation_running)
-
-
-
-async def stt_session_task(
-        audio_queue: asyncio.Queue[Optional[bytes]],
-        transcript_queue: asyncio.Queue[Optional[str]],
-        app_running: asyncio.Event,
-):
-    """
-    Runner that keeps opening the STT session in case it crashes/ is shutdown.
-    """
-
-    retry_delay = 1.0
-    failed_retries = 0
-
-    while app_running.is_set():
-        start_ts = time()
-        try:
-            logger.info("[STT] Starting STT session.")
-            await init_stt_once(audio_queue, transcript_queue, app_running)
-            logger.info("[STT] STT session ended.")
-        except Exception as e:
-            # this should be a rare occurrence, since exceptions should be caught locally
-            logger.exception("[STT] STT crashed: %r", e, exc_info=e)
-
-        if not app_running.is_set():
-            break  # application quit
-
-        # check if situation is bad and kill everything if we cannot init conversation
-        if time() - start_ts < 10:
-            # if we crashed within 10 s of starting something is bad
-            failed_retries += 1
-
-        if failed_retries > 3:
-            raise RuntimeError("3 failed STT startup attempts. System shutdown.")
-
-        logger.info("[STT] Reconnecting in %.1fs...", retry_delay)
-        await asyncio.sleep(min(failed_retries * retry_delay, 0.5))
-
-    logger.info("[STT] STT finished.")
 
 
 # ---------------------------------------------------------------------------
