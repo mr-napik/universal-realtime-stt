@@ -15,11 +15,14 @@ LOG_PATH.mkdir(exist_ok=True)
 # (ElevenLabs default is fairly long at 1.5). Drawback is that only after this time, we
 # get the transcript, so if it is too long it introduces significant delay before AI even starts.
 STT_VAD_SILENCE_THRESHOLD_S = 0.7  # seconds
+
 # How big difference between silence and speech, default 0.4 (
 STT_VAD_THRESHOLD = 0.6
+
 # The minimum length of silence (in milliseconds) required to consider
 # the audio as non-speech or to trigger a pause in detection.
 STT_MIN_SILENCE_DURATION_MS = 300  # milliseconds
+
 # Minimum speech duration in milliseconds:
 # how long segment needs to be, to be considered speech and not noise.
 STT_MIN_SPEECH_DURATION_MS = 1000   # milliseconds
@@ -30,4 +33,5 @@ AUDIO_CHANNELS = 1
 CHUNK_MS = 200
 
 #Test config (0.0 = stream as fast as possible (no pacing), 1.0 = stream at natural pace).
-STT_TEST_REALTIME_FACTOR = 1.0
+TEST_REALTIME_FACTOR = 1.0
+FINAL_SILENCE_S = 2.0
