@@ -1,5 +1,4 @@
 # Core
-fastapi>=0.128.0
 websockets>=16.0.0
 elevenlabs>=2.31.0
 python-dotenv>=1.2.1
