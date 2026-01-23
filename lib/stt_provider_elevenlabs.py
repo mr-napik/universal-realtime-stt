@@ -6,18 +6,17 @@ from json import loads, dumps
 from logging import getLogger
 from typing import AsyncIterator, Optional
 
+from dotenv import load_dotenv
+from os import getenv
 from websockets import connect, ConnectionClosedOK
 
 from config import (
     AUDIO_SAMPLE_RATE,
-    ELEVENLABS_STT_VAD_SILENCE_THRESHOLD_S,
-    ELEVENLABS_STT_MIN_SILENCE_DURATION_MS,
-    ELEVENLABS_STT_REALTIME_URL,
-    ELEVENLABS_API_KEY,
-    ELEVENLABS_STT_MIN_SPEECH_DURATION_MS,
-    ELEVENLABS_STT_VAD_THRESHOLD,
+    STT_VAD_SILENCE_THRESHOLD_S,
+    STT_MIN_SILENCE_DURATION_MS,
+    STT_MIN_SPEECH_DURATION_MS,
+    STT_VAD_THRESHOLD,
 )
-
 from lib.stt_provider import RealtimeSttProvider, TranscriptEvent
 
 
@@ -35,6 +34,15 @@ STT_ERROR_TYPES = frozenset({
     "queue_overflow",
 })
 
+# Speech to text parameters
+# https://elevenlabs.io/docs/models
+ELEVENLABS_STT_REALTIME_URL = "wss://api.elevenlabs.io/v1/speech-to-text/realtime"
+ELEVENLABS_STT_REALTIME_MODEL = "scribe_v2_realtime"
+
+# credentials
+load_dotenv()
+ELEVENLABS_API_KEY = getenv("ELEVENLABS_API_KEY")
+
 
 def _build_stt_url() -> tuple[str, dict[str, str]]:
     audio_format = f"pcm_{AUDIO_SAMPLE_RATE}"
@@ -43,10 +51,10 @@ def _build_stt_url() -> tuple[str, dict[str, str]]:
         f"audio_format={audio_format}",
         "commit_strategy=vad",
         "language_code=cs",
-        f"vad_silence_threshold_secs={ELEVENLABS_STT_VAD_SILENCE_THRESHOLD_S}",
-        f"vad_threshold={ELEVENLABS_STT_VAD_THRESHOLD}",
-        f"min_silence_duration_ms={ELEVENLABS_STT_MIN_SILENCE_DURATION_MS}",
-        f"min_speech_duration_ms={ELEVENLABS_STT_MIN_SPEECH_DURATION_MS}",
+        f"vad_silence_threshold_secs={STT_VAD_SILENCE_THRESHOLD_S}",
+        f"vad_threshold={STT_VAD_THRESHOLD}",
+        f"min_silence_duration_ms={STT_MIN_SILENCE_DURATION_MS}",
+        f"min_speech_duration_ms={STT_MIN_SPEECH_DURATION_MS}",
     ]
     ws_url = ELEVENLABS_STT_REALTIME_URL + "?" + "&".join(query_params)
     headers = {"xi-api-key": ELEVENLABS_API_KEY}
@@ -128,6 +136,7 @@ class ElevenLabsRealtimeProvider(RealtimeSttProvider):
             while not self._closed.is_set():
                 ev = await self._events_q.get()
                 yield ev
+
         return _aiter()
 
     async def _recv_loop(self) -> None:
