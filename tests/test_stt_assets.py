@@ -41,7 +41,7 @@ class TestSttAssets(unittest.IsolatedAsyncioTestCase):
         repo_root = Path(__file__).resolve().parents[1]
         assets_dir = repo_root / "assets"
 
-        ts = {datetime.now().strftime('%Y%m%d_%H%M%S')}
+        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
 
         chunk_ms = CHUNK_MS
         realtime_factor = STT_TEST_REALTIME_FACTOR
