@@ -15,8 +15,8 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 # Run tests (requires ELEVENLABS_API_KEY in .env)
-pytest tests/test_stt_assets.py
-pytest tests/test_stt_assets.py -v
+pytest tests/test_stt.py
+pytest tests/test_stt.py -v
 ```
 
 ## Architecture

@@ -147,11 +147,13 @@ class ElevenLabsRealtimeProvider(RealtimeSttProvider):
                 msg_type = data.get("message_type")
 
                 if msg_type == STT_MSG_PARTIAL_TRANSCRIPT:
+                    # print("Partial transcript", data.get("text", "").strip())
                     continue
 
                 if msg_type in (STT_MSG_COMMITTED_TRANSCRIPT, STT_MSG_COMMITTED_TRANSCRIPT_TS):
                     text = data.get("text", "").strip()
                     if text:
+                        print("Committed transcript", text)
                         await self._events_q.put(TranscriptEvent(text=text, is_final=True))
                     continue
 

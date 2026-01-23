@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import traceback
 from dataclasses import dataclass
 from logging import getLogger
 from typing import AsyncIterator, Optional
@@ -31,7 +32,7 @@ class GoogleRealtimeProvider(RealtimeSttProvider):
     def __init__(self, cfg: Optional[GoogleSttConfig] = None) -> None:
         self._cfg = cfg or GoogleSttConfig()
         self._audio_q: asyncio.Queue[Optional[bytes]] = asyncio.Queue(maxsize=400)
-        self._events_q: asyncio.Queue[TranscriptEvent] = asyncio.Queue(maxsize=200)
+        self._events_q: asyncio.Queue[Optional[TranscriptEvent]] = asyncio.Queue(maxsize=200)
         self._closed = asyncio.Event()
         self._thread_task: Optional[asyncio.Task] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -57,10 +58,12 @@ class GoogleRealtimeProvider(RealtimeSttProvider):
         # Signal request generator to finish
         await self._audio_q.put(None)
 
-    def events(self) -> AsyncIterator[TranscriptEvent]:
+    def events(self) -> AsyncIterator[TranscriptEvent | None]:
         async def _aiter() -> AsyncIterator[TranscriptEvent]:
-            while not self._closed.is_set():
+            while True:
                 ev = await self._events_q.get()
+                if ev is None:
+                    break
                 yield ev
         return _aiter()
 
@@ -83,8 +86,6 @@ class GoogleRealtimeProvider(RealtimeSttProvider):
         loop = self._loop  # NEW
 
         def request_iter():
-            # first request must contain streaming_config (per API contract) :contentReference[oaicite:4]{index=4}
-            yield speech.StreamingRecognizeRequest(streaming_config=streaming_config)
             while True:
                 chunk = asyncio.run_coroutine_threadsafe(self._audio_q.get(), loop).result()
                 if chunk is None:
@@ -92,25 +93,36 @@ class GoogleRealtimeProvider(RealtimeSttProvider):
                 yield speech.StreamingRecognizeRequest(audio_content=chunk)
 
         try:
-            responses = client.streaming_recognize(requests=request_iter())
+            responses = client.streaming_recognize(streaming_config, request_iter())
             for resp in responses:
-                for result in resp.results:
-                    # Google results can contain multiple alternatives; take the top.
-                    if not result.alternatives:
-                        continue
-                    text = (result.alternatives[0].transcript or "").strip()
-                    if not text:
-                        continue
+                print(resp)
+                result = getattr(resp, "results", None)
+                if not result:
+                    continue
 
-                    # Treat "is_final" as your "committed"
-                    if result.is_final:
-                        asyncio.run_coroutine_threadsafe(
-                            self._events_q.put(TranscriptEvent(text=text, is_final=True)),
-                            loop,
-                        ).result()
+                # Google results can contain multiple alternatives; take the top.
+                # result is a StreamingRecognitionResult
+                if not getattr(result, "alternatives", None):
+                    continue
+
+                alt0 = result.alternatives[0]
+                text = (alt0.transcript or "").strip()
+
+                if not text:
+                    continue
+
+                # Treat "is_final" as your "committed"
+                if bool(getattr(result, "is_final", False)):
+                    asyncio.run_coroutine_threadsafe(
+                        self._events_q.put(TranscriptEvent(text=text, is_final=True)),
+                        loop,
+                    ).result()
 
         except Exception as e:
-            logger.warning("[STT] Google streaming crashed: %r", e)
+            logger.exception("[STT] Google streaming crashed: %r", e)
+            traceback.print_exc()
         finally:
+            # send task end sentinels
             asyncio.run_coroutine_threadsafe(self._audio_q.put(None), loop)
+            asyncio.run_coroutine_threadsafe(self._events_q.put(None), loop)
             self._closed.set()

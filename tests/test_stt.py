@@ -38,7 +38,7 @@ async def _ingest_transcripts_using_lib(
     return result
 
 
-class TestSttAssets(unittest.IsolatedAsyncioTestCase):
+class TestStt(unittest.IsolatedAsyncioTestCase):
     async def _runner(self, provider: RealtimeSttProvider) -> None:
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')  # make sure all reports from run has same timestamp
         ts += "_" + provider.__class__.__name__
@@ -49,8 +49,10 @@ class TestSttAssets(unittest.IsolatedAsyncioTestCase):
 
         for pair in pairs:
             with self.subTest(msg=pair.wav.name):
+                # read the expected file and normalize it.
                 expected = _normalize_text(pair.txt.read_text(encoding="utf-8"))
 
+                # prepare streaming machinery
                 audio_queue: asyncio.Queue = asyncio.Queue(maxsize=200)
                 transcript_queue: asyncio.Queue = asyncio.Queue(maxsize=200)
                 running = asyncio.Event()
@@ -58,7 +60,6 @@ class TestSttAssets(unittest.IsolatedAsyncioTestCase):
 
                 stt_task = asyncio.create_task(init_stt_once_provider(provider, audio_queue, transcript_queue, running))
                 ingest_task = asyncio.create_task(_ingest_transcripts_using_lib(running, transcript_queue))
-
                 pcm_chunks_iterator = iter_wav_pcm_chunks(
                     pair.wav,
                     chunk_ms=CHUNK_MS,
@@ -88,30 +89,31 @@ class TestSttAssets(unittest.IsolatedAsyncioTestCase):
                 await transcript_queue.put(None)
                 segments = await ingest_task
 
+                # get results
+                got = _normalize_text(" ".join(segments))
+                print(got)
+
+                # stop everything
                 running.clear()
 
-                got = _normalize_text(" ".join(segments))
+                # write report
+                report_path = TMP_PATH / f"{ts}_{pair.wav.stem}.diff.html"
+                report = write_diff_html(
+                    expected=expected,
+                    got=got,
+                    out_path=report_path,
+                    title=f"{pair.wav.name}",
+                    context_hint=f"Asset: {pair.wav}\nExpected: {pair.txt}\n",
+                )
+                print(f"{pair.wav.name} error rate: {report.character_error_rate:.1f}%")
 
                 # evaluate result
-                if got != expected:
-                    report_path = TMP_PATH / f"{ts}_{pair.wav.stem}.diff.html"
-                    report = write_diff_html(
-                        expected=expected,
-                        got=got,
-                        out_path=report_path,
-                        title=f"{pair.wav.name}",
-                        context_hint=f"Asset: {pair.wav}\nExpected: {pair.txt}\n",
+                if report.character_error_rate > 5.0:
+                    self.fail(
+                        f"{pair.wav.name} error rate: {report.character_error_rate:.1f}%\n"
+                        f"Transcript mismatch for {pair.wav.name}\n"
+                        f"Diff report written to: {report.html_path}\n"
                     )
-
-                    print(f"{pair.wav.name} error rate: {report.character_error_rate:.1f}%")
-                    if report.character_error_rate > 5.0:
-                        self.fail(
-                            f"{pair.wav.name} error rate: {report.character_error_rate:.1f}%\n"
-                            f"Transcript mismatch for {pair.wav.name}\n"
-                            f"Diff report written to: {report.html_path}\n"
-                        )
-                else:
-                    print("Exact match! Wow!")
 
     async def test_eleven_labs(self) -> None:
         provider = ElevenLabsRealtimeProvider()
