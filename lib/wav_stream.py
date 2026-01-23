@@ -100,7 +100,7 @@ async def stream_pcm_to_queue_realtime(
         cnt += 1
 
         if cnt % 20 == 0:
-            print(f"Sent chunk {cnt}...", flush=True)
+            print(f"Wav stream: sent chunk {cnt}...", flush=True)
 
         if realtime_factor > 0:
             await asyncio.sleep((chunk_ms / 1000.0) * realtime_factor)

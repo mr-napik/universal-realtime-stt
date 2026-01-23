@@ -48,12 +48,14 @@ async def init_stt_once_provider(
         sender = asyncio.create_task(_sender())
         receiver = asyncio.create_task(_receiver())
 
-        _, pending = await asyncio.wait(
-            {sender, receiver},
-            return_when=asyncio.FIRST_COMPLETED,
-        )
-        for t in pending:
-            t.cancel()
+        try:
+            await sender       # finishes sending + end_audio() signals provider to close
+            await receiver     # finishes when provider's events() yields None
+        finally:
+            if not sender.done():
+                sender.cancel()
+            if not receiver.done():
+                receiver.cancel()
 
 
 # ---------------------------------------------------------------------------

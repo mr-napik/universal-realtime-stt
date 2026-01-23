@@ -6,9 +6,10 @@ from dataclasses import dataclass
 from logging import getLogger
 from typing import AsyncIterator, Optional
 
+from google.cloud import speech
+
 from config import AUDIO_SAMPLE_RATE
 from lib.stt_provider import RealtimeSttProvider, TranscriptEvent
-from google.cloud import speech
 
 logger = getLogger(__name__)
 
@@ -22,11 +23,8 @@ class GoogleRealtimeProvider(RealtimeSttProvider):
     """
     Google Cloud Speech-to-Text v1 streaming adapter.
 
-    Dependency:
-      pip install google-cloud-speech
-
-    Auth:
-      export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service_account.json
+    Library: google-cloud-speech==2.36.0
+    Uses: SpeechClient.streaming_recognize(streaming_config, requests)
     """
 
     def __init__(self, cfg: Optional[GoogleSttConfig] = None) -> None:
@@ -38,14 +36,13 @@ class GoogleRealtimeProvider(RealtimeSttProvider):
         self._loop: Optional[asyncio.AbstractEventLoop] = None
 
     async def __aenter__(self) -> "GoogleRealtimeProvider":
-        self._loop = asyncio.get_running_loop()  # NEW (main loop link)
+        self._loop = asyncio.get_running_loop()
         self._thread_task = asyncio.create_task(self._run_stream_in_thread())
         return self
 
     async def __aexit__(self, exc_type, exc, tb) -> None:
         try:
             await self.end_audio()
-            self._closed.set()
             if self._thread_task:
                 await self._thread_task
         finally:
@@ -71,58 +68,59 @@ class GoogleRealtimeProvider(RealtimeSttProvider):
         await asyncio.to_thread(self._blocking_stream_loop)
 
     def _blocking_stream_loop(self) -> None:
+        loop = self._loop
+        if loop is None:
+            raise RuntimeError("GoogleRealtimeProvider: event loop not set")
+
         client = speech.SpeechClient()
 
+        # IntelliJ sometimes warns these constructors want dict; that's just stub noise.
         config = speech.RecognitionConfig(
-            encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-            sample_rate_hertz=AUDIO_SAMPLE_RATE,
-            language_code=self._cfg.language_code,
+            encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,  # type: ignore[arg-type]
+            sample_rate_hertz=AUDIO_SAMPLE_RATE,  # type: ignore[arg-type]
+            language_code=self._cfg.language_code,  # type: ignore[arg-type]
         )
         streaming_config = speech.StreamingRecognitionConfig(
-            config=config,
-            interim_results=True,
+            config=config,    # type: ignore[arg-type]
+            interim_results=True,    # type: ignore[arg-type]
         )
 
-        loop = self._loop  # NEW
-
         def request_iter():
+            # With google-cloud-speech 2.36.0, streaming_config is passed as the first
+            # argument to streaming_recognize(), and requests should contain audio only.
             while True:
                 chunk = asyncio.run_coroutine_threadsafe(self._audio_q.get(), loop).result()
                 if chunk is None:
                     break
-                yield speech.StreamingRecognizeRequest(audio_content=chunk)
+                yield speech.StreamingRecognizeRequest(audio_content=chunk)  # type: ignore[arg-type]
 
         try:
-            responses = client.streaming_recognize(streaming_config, request_iter())
+            # Signature in your env is (config, requests, ...) => pass both positionally.
+            responses = client.streaming_recognize(streaming_config, request_iter())   # type: ignore[arg-type]
+
             for resp in responses:
-                print(resp)
-                result = getattr(resp, "results", None)
-                if not result:
-                    continue
+                # logger.debug("Received google streaming response ...")
 
-                # Google results can contain multiple alternatives; take the top.
-                # result is a StreamingRecognitionResult
-                if not getattr(result, "alternatives", None):
-                    continue
+                # resp.results is a repeated field; iterate it.
+                for result in getattr(resp, "results", ()):
+                    # print("RESULT:", result)
 
-                alt0 = result.alternatives[0]
-                text = (alt0.transcript or "").strip()
+                    text = (result.alternatives[0].transcript or "").strip()
+                    if not text:
+                        continue
 
-                if not text:
-                    continue
-
-                # Treat "is_final" as your "committed"
-                if bool(getattr(result, "is_final", False)):
-                    asyncio.run_coroutine_threadsafe(
-                        self._events_q.put(TranscriptEvent(text=text, is_final=True)),
-                        loop,
-                    ).result()
+                    # Treat is_final as "committed"
+                    if bool(getattr(result, "is_final", False)):
+                        logger.info("FINAL: %s", text)
+                        asyncio.run_coroutine_threadsafe(
+                            self._events_q.put(TranscriptEvent(text=text, is_final=True)),
+                            loop,
+                        ).result()
 
         except Exception as e:
             logger.exception("[STT] Google streaming crashed: %r", e)
             traceback.print_exc()
         finally:
-            # send task end sentinels
-            asyncio.run_coroutine_threadsafe(self._audio_q.put(None), loop)
-            asyncio.run_coroutine_threadsafe(self._events_q.put(None), loop)
+            # Stop the async iterator and mark closed.
+            asyncio.run_coroutine_threadsafe(self._events_q.put(None), loop).result()
             self._closed.set()

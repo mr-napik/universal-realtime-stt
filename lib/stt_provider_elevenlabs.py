@@ -127,14 +127,17 @@ class ElevenLabsRealtimeProvider(RealtimeSttProvider):
         await self._stt_ws.send(dumps(payload))
 
     async def end_audio(self) -> None:
-        # ElevenLabs doesn't require a special "end" message here for your current flow.
-        # We just stop sending; session will close when the outer orchestration ends.
-        return
+        # Close the WebSocket. The closing handshake lets the server flush any
+        # pending committed transcripts before the connection fully closes.
+        if self._stt_ws:
+            await self._stt_ws.close()
 
     def events(self) -> AsyncIterator[TranscriptEvent]:
         async def _aiter() -> AsyncIterator[TranscriptEvent]:
-            while not self._closed.is_set():
+            while True:
                 ev = await self._events_q.get()
+                if ev is None:
+                    break
                 yield ev
 
         return _aiter()
@@ -168,3 +171,4 @@ class ElevenLabsRealtimeProvider(RealtimeSttProvider):
             logger.warning("[STT] ElevenLabs receiver crashed: %r", e)
         finally:
             self._closed.set()
+            await self._events_q.put(None)
