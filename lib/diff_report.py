@@ -13,6 +13,11 @@ class DiffReport:
     got: str
     levenshtein: int
 
+    @property
+    def character_error_rate(self):
+        """Returns character error rate in percent (based on levenshtein distance)."""
+        return round(float(self.levenshtein) / len(self.expected) * 100, 1)
+
 
 def write_diff_html(
         *,
@@ -42,6 +47,9 @@ def write_diff_html(
 
     diff_html = dmp.diff_prettyHtml(diffs)
 
+    # report object
+    report = DiffReport(html_path=out_path, expected=expected, got=got, levenshtein=levenshtein)
+
     # Minimal, self-contained HTML document. dmp.diff_prettyHtml returns <span> tags with inline styles.
     # We wrap it with some structure + monospace + whitespace preserving.
     hint_html = f"<div class='hint'>{_escape_html(context_hint)}</div>" if context_hint else ""
@@ -54,10 +62,6 @@ def write_diff_html(
     body {{
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
       margin: 2em;
-    }}
-    .meta {{
-      color: #555;
-      margin-bottom: 12px;
     }}
     .hint {{
       padding: 10px 12px;
@@ -102,7 +106,7 @@ def write_diff_html(
   </style>
 </head>
 <body>
-  <div class="meta"><strong>{_escape_html(title)}</strong></div>
+  <h1>{_escape_html(title)}: {report.character_error_rate}% Character Error Rate</h1>
   {hint_html}
 
   <div class="panel">
@@ -125,7 +129,7 @@ def write_diff_html(
 </html>
 """
     out_path.write_text(html, encoding="utf-8")
-    return DiffReport(html_path=out_path, expected=expected, got=got, levenshtein=levenshtein)
+    return report
 
 
 def _escape_html(s: Optional[str]) -> str:
