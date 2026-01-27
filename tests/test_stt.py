@@ -10,15 +10,15 @@ from typing import List
 from dotenv import load_dotenv
 
 from config import AUDIO_SAMPLE_RATE, CHUNK_MS, TEST_REALTIME_FACTOR, FINAL_SILENCE_S, TMP_PATH, ASSETS_DIR
-from lib.assets import get_test_files
-from lib.diff import write_diff_report
+from lib.helper_load_assets import get_test_files
+from lib.helper_diff import write_diff_report
 from lib.stt import transcript_ingest_loop, init_stt_once_provider
 from lib.stt_provider import RealtimeSttProvider
 from lib.stt_provider_cartesia import CartesiaInkProvider, CartesiaSttConfig
 from lib.stt_provider_elevenlabs import ElevenLabsRealtimeProvider
 from lib.stt_provider_google import GoogleRealtimeProvider
 from lib.utils import setup_logging
-from lib.wav_stream import iter_wav_pcm_chunks, stream_pcm_to_queue_realtime
+from lib.helper_stream_wav import iter_wav_pcm_chunks, stream_pcm_to_queue_realtime
 
 
 setup_logging()
