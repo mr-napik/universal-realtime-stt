@@ -16,7 +16,7 @@ LOG_PATH.mkdir(exist_ok=True)
 # get the transcript, so if it is too long it introduces significant delay before AI even starts.
 STT_VAD_SILENCE_THRESHOLD_S = 0.7  # seconds
 
-# How big difference between silence and speech, default 0.4 (
+# How big difference between silence and speech, default 0.4
 STT_VAD_THRESHOLD = 0.6
 
 # The minimum length of silence (in milliseconds) required to consider

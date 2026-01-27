@@ -4,13 +4,17 @@ import asyncio
 import unittest
 from datetime import datetime
 from logging import getLogger
+from os import getenv
 from typing import List
+
+from dotenv import load_dotenv
 
 from config import AUDIO_SAMPLE_RATE, CHUNK_MS, TEST_REALTIME_FACTOR, FINAL_SILENCE_S, TMP_PATH, ASSETS_DIR
 from lib.assets import get_test_files
 from lib.diff import write_diff_report
 from lib.stt import transcript_ingest_loop, init_stt_once_provider
 from lib.stt_provider import RealtimeSttProvider
+from lib.stt_provider_cartesia import CartesiaInkProvider, CartesiaSttConfig
 from lib.stt_provider_elevenlabs import ElevenLabsRealtimeProvider
 from lib.stt_provider_google import GoogleRealtimeProvider
 from lib.utils import setup_logging
@@ -19,6 +23,7 @@ from lib.wav_stream import iter_wav_pcm_chunks, stream_pcm_to_queue_realtime
 
 setup_logging()
 logger = getLogger(__name__)
+load_dotenv()
 
 
 async def _ingest_transcripts_using_lib(
@@ -105,7 +110,7 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
 
                 # goal of the text is for STT to work,
                 # so as long as we receive similar lengths (tolerance 10%) string back, we are happy.
-                self.assertAlmostEqual(len(expected_raw), len(got_raw), delta=len(expected_raw)/10.0)
+                self.assertAlmostEqual(len(expected_raw), len(got_raw), delta=len(expected_raw) / 10.0)
 
     async def test_eleven_labs(self) -> None:
         provider = ElevenLabsRealtimeProvider()
@@ -113,4 +118,8 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
 
     async def test_google(self) -> None:
         provider = GoogleRealtimeProvider()
+        await self._runner(provider)
+
+    async def test_cartesia(self) -> None:
+        provider = CartesiaInkProvider(CartesiaSttConfig(api_key=getenv("CARTESIA_API_KEY")))
         await self._runner(provider)
