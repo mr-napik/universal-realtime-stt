@@ -3,10 +3,16 @@ from __future__ import annotations
 import asyncio
 import wave
 from dataclasses import dataclass
+from logging import getLogger
 from pathlib import Path
 from typing import Iterator, Optional
-from lib.utils import _make_silence_chunk
+
 from config import AUDIO_SAMPLE_RATE
+from lib.utils import _make_silence_chunk
+
+
+logger = getLogger(__name__)
+
 
 @dataclass(frozen=True)
 class WavFormat:
@@ -50,6 +56,7 @@ def iter_wav_pcm_chunks(
     If you want to support more formats later, extend here (not in tests).
     """
     fmt = inspect_wav(path)
+    logger.debug("Wav %s format: %r", str(path), fmt)
 
     if fmt.comptype != "NONE":
         raise ValueError(f"{path.name}: compressed WAV not supported (comptype={fmt.comptype} {fmt.compname})")
@@ -100,18 +107,20 @@ async def stream_pcm_to_queue_realtime(
         cnt += 1
 
         if cnt % 20 == 0:
-            print(f"Wav stream: sent chunk {cnt}...", flush=True)
+            logger.debug(f"Wav streaming: sent chunk {cnt}.")
 
         if realtime_factor > 0:
             await asyncio.sleep((chunk_ms / 1000.0) * realtime_factor)
 
     # allow provider/VAD to finalize "committed" transcript by sending silence...
+    logger.debug(f"Wav streaming: sending silence chunks...")
     tot = 0.0
     while tot < post_roll_silence_s:
-        chunk = _make_silence_chunk(AUDIO_SAMPLE_RATE, chunk_ms/1000.0)
+        chunk = _make_silence_chunk(AUDIO_SAMPLE_RATE, chunk_ms / 1000.0)
         await audio_queue.put(chunk)
         await asyncio.sleep((chunk_ms / 1000.0) * realtime_factor)
-        tot += chunk_ms/1000.0
+        tot += chunk_ms / 1000.0
 
     # cleanly close - this is important
+    logger.info(f"Wav streaming: done, sent {tot} chunks. Pushing None to queue.")
     await audio_queue.put(None)
