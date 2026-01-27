@@ -6,9 +6,33 @@ from typing import Optional
 
 from diff_match_patch import diff_match_patch
 
+
+def normalize_text_for_diff(s: str) -> str:
+    """
+    Normalize text for comparison:
+    - unify whitespace (converts all whitespaces to single space),
+    - convert to lowercase (as case is really hard for stt),
+
+    @TODO: unify punctuation, unify apostrophes
+    """
+    return " ".join(s.strip().split()).lower()
+
+
+def _escape_html(s: Optional[str]) -> str:
+    if s is None:
+        return ""
+    return (
+        s.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#39;")
+    )
+
+
 @dataclass(frozen=True)
 class DiffReport:
-    html_path: Path
+    report_file: Path
     expected: str
     got: str
     levenshtein: int
@@ -19,13 +43,13 @@ class DiffReport:
         return round(float(self.levenshtein) / len(self.expected) * 100, 1)
 
 
-def write_diff_html(
+def write_diff_report(
         *,
         expected: str,
         got: str,
         out_path: Path,
-        title: str = "STT Transcript Diff",
-        context_hint: Optional[str] = None,
+        title: str,
+        sound_file: str,
 ) -> DiffReport:
     """
     Create a human-readable HTML diff using diff-match-patch.
@@ -35,24 +59,23 @@ def write_diff_html(
       - got text
       - colored diff (insertions/deletions)
 
-    Returns DiffReport with the written path.
+    Returns DiffReport object with the written path.
     """
     out_path = out_path.resolve()
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     dmp = diff_match_patch()
-    diffs = dmp.diff_main(expected, got)
+    diffs = dmp.diff_main(normalize_text_for_diff(expected), normalize_text_for_diff(got))
     dmp.diff_cleanupSemantic(diffs)
     levenshtein = dmp.diff_levenshtein(diffs)
 
     diff_html = dmp.diff_prettyHtml(diffs)
 
     # report object
-    report = DiffReport(html_path=out_path, expected=expected, got=got, levenshtein=levenshtein)
+    report = DiffReport(report_file=out_path, expected=expected, got=got, levenshtein=levenshtein)
 
     # Minimal, self-contained HTML document. dmp.diff_prettyHtml returns <span> tags with inline styles.
     # We wrap it with some structure + monospace + whitespace preserving.
-    hint_html = f"<div class='hint'>{_escape_html(context_hint)}</div>" if context_hint else ""
     html = f"""<!doctype html>
 <html lang="en">
 <head>
@@ -107,7 +130,8 @@ def write_diff_html(
 </head>
 <body>
   <h1>{_escape_html(title)}: {report.character_error_rate}% Character Error Rate</h1>
-  {hint_html}
+  
+  <div class='hint'>{_escape_html(sound_file)}</div>
 
   <div class="panel">
     <h2>Diff (red = deletions, green = insertions)</h2>
@@ -130,15 +154,3 @@ def write_diff_html(
 """
     out_path.write_text(html, encoding="utf-8")
     return report
-
-
-def _escape_html(s: Optional[str]) -> str:
-    if s is None:
-        return ""
-    return (
-        s.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-        .replace("'", "&#39;")
-    )
