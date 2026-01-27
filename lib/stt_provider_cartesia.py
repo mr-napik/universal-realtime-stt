@@ -7,7 +7,7 @@ from logging import getLogger
 from typing import AsyncIterator, Optional
 from urllib.parse import urlencode
 
-from websockets import connect, ConnectionClosedOK
+from websockets import connect, ConnectionClosedOK, ConnectionClosed
 
 from config import AUDIO_SAMPLE_RATE, STT_VAD_SILENCE_THRESHOLD_S
 from lib.stt_provider import RealtimeSttProvider, TranscriptEvent
@@ -56,14 +56,17 @@ class CartesiaInkProvider(RealtimeSttProvider):
         })
         url = f"{self._cfg.base_url}?{qs}"
 
-        # Auth: Cartesia supports X-API-Key header. :contentReference[oaicite:3]{index=3}
+        # Auth: Cartesia requires X-API-Key and Cartesia-Version headers.
         self._ws = await connect(
             url,
-            additional_headers={"X-API-Key": self._cfg.api_key},
+            additional_headers={
+                "X-API-Key": self._cfg.api_key,
+                "Cartesia-Version": "2025-04-16",
+            },
             ping_interval=10,
             ping_timeout=10,
             close_timeout=5,
-            max_queue=32,
+            max_queue=1024,  # larger queue to handle Cartesia's frequent interim transcripts
         )
 
         self._rx_task = asyncio.create_task(self._recv_loop())
@@ -91,7 +94,14 @@ class CartesiaInkProvider(RealtimeSttProvider):
 
     async def send_audio(self, pcm_chunk: bytes) -> None:
         # Cartesia expects raw binary audio frames. :contentReference[oaicite:4]{index=4}
-        await self._ws.send(pcm_chunk)
+        if self._closed.is_set() or self._ws is None:
+            logger.warning("[STT] Cartesia: cannot send audio, connection closed")
+            return
+        try:
+            await self._ws.send(pcm_chunk)
+        except ConnectionClosed:
+            logger.warning("[STT] Cartesia: connection closed while sending audio")
+            self._closed.set()
 
     async def end_audio(self) -> None:
         # 'done' flushes remaining audio and closes session. :contentReference[oaicite:5]{index=5}
@@ -113,10 +123,12 @@ class CartesiaInkProvider(RealtimeSttProvider):
         try:
             while not self._closed.is_set():
                 msg = await self._ws.recv()
+                logger.debug("[STT] Cartesia: received message: %r", msg)
 
                 # Cartesia sends JSON text messages for transcripts / acknowledgements. :contentReference[oaicite:6]{index=6}
                 if isinstance(msg, bytes):
                     # Unexpected; ignore.
+                    logger.warning("[STT] Cartesia: received unexpected message: %r", msg)
                     continue
 
                 data = json.loads(msg)
@@ -127,12 +139,16 @@ class CartesiaInkProvider(RealtimeSttProvider):
                     is_final = bool(data.get("is_final", False))
                     if is_final and text:
                         await self._events_q.put(TranscriptEvent(text=text, is_final=True))
+                    else:
+                        logger.debug("[STT] Cartesia: type %s, text %s", typ, text)
                     continue
 
                 if typ in ("flush_done",):
+                    logger.info("[STT] Cartesia: received flush_done")
                     continue
 
                 if typ == "done":
+                    logger.info("[STT] Cartesia: received done")
                     break
 
                 # Error format: { "type": "<string>", "error": "<string>", ... } :contentReference[oaicite:7]{index=7}
@@ -140,7 +156,9 @@ class CartesiaInkProvider(RealtimeSttProvider):
                     raise RuntimeError(f"Cartesia STT error: {data}")
 
         except ConnectionClosedOK:
-            pass
+            logger.debug("[STT] Cartesia: session closed cleanly.")
+        except ConnectionClosed as e:
+            logger.warning("[STT] Cartesia: connection closed unexpectedly: %s", e)
         except asyncio.CancelledError:
             raise
         except Exception as e:

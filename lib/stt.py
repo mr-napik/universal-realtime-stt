@@ -26,6 +26,7 @@ async def init_stt_once_provider(
       - pushes committed transcripts into transcript_queue
     """
 
+    logger.debug("[STT] Initializing STT once...")
     async def _sender() -> None:
         try:
             while conversation_running.is_set():
@@ -34,11 +35,12 @@ async def init_stt_once_provider(
                     break
                 await provider.send_audio(chunk)
         finally:
+            logger.debug("[STT] _sender() reached finally.")
             await provider.end_audio()
 
     async def _receiver() -> None:
         async for ev in provider.events():
-            logger.info("UPSTREAM RECEIVER GOT: %r", ev)
+            logger.info("[STT] _receiver(): received event: %r", ev)
             if not conversation_running.is_set():
                 break
             if ev.is_final and ev.text.strip():
@@ -52,6 +54,7 @@ async def init_stt_once_provider(
             await sender       # finishes sending + end_audio() signals provider to close
             await receiver     # finishes when provider's events() yields None
         finally:
+            logger.debug("[STT] init_stt_once_provider(): reached finally.")
             if not sender.done():
                 sender.cancel()
             if not receiver.done():
@@ -115,7 +118,7 @@ async def transcript_ingest_step(
     if not text:
         return True  # Empty batch, continue
 
-    print("[INGEST] Received:", text)
+    logger.info("[INGEST] Received: %s", text)
     result.append(text)
     return True
 
