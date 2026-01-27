@@ -42,9 +42,12 @@ async def init_stt_once_provider(
         async for ev in provider.events():
             logger.info("[STT] _receiver(): received event: %r", ev)
             if not conversation_running.is_set():
+                logger.warning("[STT] _receiver(): conversation_running is not set, breaking")
                 break
             if ev.is_final and ev.text.strip():
+                logger.debug("[STT] _receiver(): putting in transcript_queue: %s", ev.text.strip()[:50])
                 await transcript_queue.put(ev.text.strip())
+                logger.debug("[STT] _receiver(): put completed, queue size now: %d", transcript_queue.qsize())
 
     async with provider:
         sender = asyncio.create_task(_sender())
@@ -80,7 +83,9 @@ async def drain_transcript_queue(
     """
     texts = []
     try:
+        logger.debug("[INGEST] drain_transcript_queue: waiting for first item...")
         first = await queue.get()
+        # logger.debug("[INGEST] drain_transcript_queue: got first item: %r", first[:50] if first else first)
         if first is None:
             return None  # Stop signal
 

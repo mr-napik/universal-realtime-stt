@@ -92,7 +92,7 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
 
                 # get results
                 got_raw = " ".join(segments)
-                print(got_raw)
+                logger.info("Final result raw: %r", got_raw)
 
                 # stop everything
                 running.clear()
@@ -106,7 +106,7 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
                     title=f"{pair.wav.name}",
                     sound_file=f"Asset: {pair.wav}\nExpected: {pair.txt}\n",
                 )
-                print(f"{pair.wav.name} error rate: {report.character_error_rate:.1f}%")
+                logger.info(f"{pair.wav.name} error rate: {report.character_error_rate:.1f}%")
 
                 # goal of the text is for STT to work,
                 # so as long as we receive similar lengths (tolerance 10%) string back, we are happy.
