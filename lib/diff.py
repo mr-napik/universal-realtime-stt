@@ -7,14 +7,46 @@ from typing import Optional
 from diff_match_patch import diff_match_patch
 
 
-def normalize_text_for_diff(s: str) -> str:
+_PUNCTUATION_NORMALIZE = str.maketrans({
+    # Curly/smart double quotes → straight
+    '\u201c': '"',  # "
+    '\u201d': '"',  # "
+    '\u201e': '"',  # „
+    '\u201f': '"',  # ‟
+    # Curly/smart single quotes → straight
+    '\u2018': "'",  # '
+    '\u2019': "'",  # '
+    '\u201a': "'",  # ‚
+    '\u201b': "'",  # ‛
+    # Guillemets → straight
+    '\u00ab': '"',  # «
+    '\u00bb': '"',  # »
+    '\u2039': "'",  # ‹
+    '\u203a': "'",  # ›
+    # Dashes → hyphen
+    '\u2013': '-',  # en-dash –
+    '\u2014': '-',  # em-dash —
+    '\u2010': '-',  # hyphen ‐
+    '\u2011': '-',  # non-breaking hyphen ‑
+    '\u2212': '-',  # minus sign −
+    # Ellipsis → period
+    '\u2026': '.',  # …
+})
+
+_PUNCTUATION_REMOVE = str.maketrans('', '', '.,!?;:"\'-')
+
+
+def normalize_text_for_diff(s: str, remove_punctuation: bool = True) -> str:
     """
     Normalize text for comparison:
     - unify whitespace (converts all whitespaces to single space),
     - convert to lowercase (as case is really hard for stt),
-
-    @TODO: unify punctuation, unify apostrophes
+    - normalize punctuation variants (curly quotes, dashes, etc.) to ASCII equivalents,
+    - optionally remove common punctuation entirely (default: True).
     """
+    s = s.translate(_PUNCTUATION_NORMALIZE)
+    if remove_punctuation:
+        s = s.translate(_PUNCTUATION_REMOVE)
     return " ".join(s.strip().split()).lower()
 
 
@@ -134,7 +166,7 @@ def write_diff_report(
   <div class='hint'>{_escape_html(sound_file)}</div>
 
   <div class="panel">
-    <h2>Diff (red = deletions, green = insertions)</h2>
+    <h2>Diff (regardless of punctuation; red = deletions, green = insertions)</h2>
     <div class="diff">{diff_html}</div>
   </div>
 
