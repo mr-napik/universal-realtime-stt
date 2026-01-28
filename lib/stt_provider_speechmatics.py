@@ -215,17 +215,21 @@ class SpeechmaticsRealtimeProvider(RealtimeSttProvider):
                     continue
 
                 if typ == "AddTranscript":
-                    text = (data.get("transcript") or "").strip()
-                    if text:
-                        await self._events_q.put(TranscriptEvent(text=text, is_final=True))
+                    logger.debug("[STT] Speechmatics: AddTranscript %r", data)
+                    try:
+                        text = data['results'][0]['alternatives'][0]['content']
+                        if text:
+                            await self._events_q.put(TranscriptEvent(text=text, is_final=True))
+                    except Exception as e:
+                        logger.exception("[STT] Speechmatics: AddTranscript failed %r", e)
                     continue
 
                 if typ == "AddPartialTranscript":
-                    logger.debug("[STT] Speechmatics: AddPartialTranscript %r", data.get("transcript"))
+                    logger.debug("[STT] Speechmatics: AddPartialTranscript %r", str(data)[:300])
                     continue
 
                 if typ == "EndOfTranscript":
-                    logger.debug("[STT] Speechmatics: EndOfTranscript received")
+                    logger.info("[STT] Speechmatics: EndOfTranscript received")
                     break
 
                 if typ == "Warning":
