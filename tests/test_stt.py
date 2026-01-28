@@ -15,7 +15,7 @@ from lib.helper_diff import write_diff_report
 from lib.stt import transcript_ingest_loop, init_stt_once_provider
 from lib.stt_provider import RealtimeSttProvider
 from lib.stt_provider_cartesia import CartesiaInkProvider, CartesiaSttConfig
-from lib.stt_provider_elevenlabs import ElevenLabsRealtimeProvider
+from lib.stt_provider_elevenlabs import ElevenLabsRealtimeProvider, ElevenLabsSttConfig
 from lib.stt_provider_google import GoogleRealtimeProvider
 from lib.utils import setup_logging
 from lib.helper_stream_wav import stream_wav_file
@@ -110,7 +110,7 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
                 self.assertAlmostEqual(len(expected_raw), len(got_raw), delta=len(expected_raw) / 10.0)
 
     async def test_eleven_labs(self) -> None:
-        provider = ElevenLabsRealtimeProvider()
+        provider = ElevenLabsRealtimeProvider(ElevenLabsSttConfig(api_key=getenv("ELEVENLABS_API_KEY")))
         await self._runner(provider)
 
     async def test_google(self) -> None:
