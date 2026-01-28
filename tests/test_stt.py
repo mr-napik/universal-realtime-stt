@@ -26,19 +26,6 @@ logger = getLogger(__name__)
 load_dotenv()
 
 
-async def _ingest_transcripts_using_lib(
-        running: asyncio.Event,
-        transcript_queue: asyncio.Queue,
-) -> List[str]:
-    """
-    Uses the same transcript ingest loop as the main project (lib/stt.py),
-    so any logic changes there remain backportable.
-    """
-    result: List[str] = []
-    await transcript_ingest_loop(running, transcript_queue, result)
-    return result
-
-
 class TestStt(unittest.IsolatedAsyncioTestCase):
     async def _runner(self, provider: RealtimeSttProvider) -> None:
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')  # make sure all reports from run has same timestamp
@@ -56,11 +43,12 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
                 # prepare streaming machinery
                 audio_queue: asyncio.Queue = asyncio.Queue(maxsize=200)
                 transcript_queue: asyncio.Queue = asyncio.Queue(maxsize=200)
+                transcript_segments: List[str] = []
                 running = asyncio.Event()
                 running.set()
 
                 stt_task = asyncio.create_task(init_stt_once_provider(provider, audio_queue, transcript_queue, running))
-                ingest_task = asyncio.create_task(_ingest_transcripts_using_lib(running, transcript_queue))
+                ingest_task = asyncio.create_task(transcript_ingest_loop(running, transcript_queue, transcript_segments))
 
                 # This actually starts streaming chunks to the queue and blocks until it is done
                 # Other tasks are already waiting to process the queue.
@@ -80,15 +68,14 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
 
                 # Give some time to STT and transcript collection to wrap up (in addition to the silence).
                 # This is time after the streaming ends we wait for last transcript to arrive.
-                logger.debug("Waiting for SST task to complete for %.1f s", FINAL_SILENCE_S * 2)
-                await asyncio.sleep(FINAL_SILENCE_S * 2)
+                # logger.debug("Waiting for SST task to complete for %.1f s", FINAL_SILENCE_S * 2)
+                # await asyncio.sleep(FINAL_SILENCE_S * 2)
 
                 # Send a stop also to the ingest loop and collect drained transcripts.
-                await transcript_queue.put(None)
-                segments = await ingest_task
+                await ingest_task
 
                 # get results
-                got_raw = " ".join(segments)
+                got_raw = " ".join(transcript_segments)
                 logger.info("Final transcript raw: %r", got_raw)
 
                 # stop everything

@@ -49,6 +49,9 @@ async def init_stt_once_provider(
                 await transcript_queue.put(ev.text.strip())
                 logger.debug("[STT] _receiver(): put completed, queue size now: %d", transcript_queue.qsize())
 
+        logger.debug("[STT] _receiver() reached finally. Putting stop token to the transcript_queue.")
+        await transcript_queue.put(None)
+
     async with provider:
         sender = asyncio.create_task(_sender())
         receiver = asyncio.create_task(_receiver())
