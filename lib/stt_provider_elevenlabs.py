@@ -12,7 +12,7 @@ from websockets import connect, ConnectionClosedOK, ConnectionClosed
 
 from config import (
     AUDIO_SAMPLE_RATE,
-    STT_LANGUAGE,
+    STT_LANGUAGE_ISO_639_1,
     STT_VAD_SILENCE_THRESHOLD_S,
     STT_MIN_SILENCE_DURATION_MS,
     STT_MIN_SPEECH_DURATION_MS,
@@ -55,7 +55,7 @@ class ElevenLabsSttConfig:
 
     # Universal STT settings (defaults from config.py, can be overridden)
     sample_rate: int = AUDIO_SAMPLE_RATE
-    language: str = STT_LANGUAGE
+    language: str = STT_LANGUAGE_ISO_639_1
     vad_silence_threshold_s: float = STT_VAD_SILENCE_THRESHOLD_S
     vad_threshold: float = STT_VAD_THRESHOLD
     min_silence_duration_ms: int = STT_MIN_SILENCE_DURATION_MS

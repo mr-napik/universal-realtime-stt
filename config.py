@@ -24,8 +24,11 @@ LOG_PATH.mkdir(exist_ok=True)
 # Universal STT Configuration (provider-independent)
 # ---------------------------------------------------------------------------
 
-# Language code for speech recognition (ISO 639-1)
-STT_LANGUAGE = "cs"
+# Language code for speech recognition
+# ISO 639-1 e.g.: "cs"
+# BCP-47 e.g.: "cs-CZ"
+STT_LANGUAGE_ISO_639_1 = "cs"
+STT_LANGUAGE_BCP_47 = "cs-CZ"
 
 # VAD threshold detects how long silence is needed before chunk is committed
 # (ElevenLabs default is fairly long at 1.5). Drawback is that only after this time, we

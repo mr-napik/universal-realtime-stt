@@ -9,7 +9,7 @@ from urllib.parse import urlencode
 
 from websockets import connect, ConnectionClosedOK, ConnectionClosed
 
-from config import AUDIO_SAMPLE_RATE, AUDIO_ENCODING, STT_LANGUAGE, STT_VAD_SILENCE_THRESHOLD_S, STT_VAD_THRESHOLD
+from config import AUDIO_SAMPLE_RATE, AUDIO_ENCODING, STT_LANGUAGE_ISO_639_1, STT_VAD_SILENCE_THRESHOLD_S
 from lib.stt_provider import RealtimeSttProvider, TranscriptEvent
 
 logger = getLogger(__name__)
@@ -31,7 +31,7 @@ class CartesiaSttConfig:
     base_url: str = "wss://api.cartesia.ai/stt/websocket"
 
     # Universal STT settings (defaults from config.py, can be overridden)
-    language: str = STT_LANGUAGE  # ISO-639-1
+    language: str = STT_LANGUAGE_ISO_639_1  # ISO-639-1
     encoding: str = AUDIO_ENCODING
     sample_rate: int = AUDIO_SAMPLE_RATE
     min_volume: float = 0.15            # VAD threshold (0..1)

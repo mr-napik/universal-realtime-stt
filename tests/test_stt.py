@@ -16,7 +16,7 @@ from lib.stt import transcript_ingest_loop, init_stt_once_provider
 from lib.stt_provider import RealtimeSttProvider
 from lib.stt_provider_cartesia import CartesiaInkProvider, CartesiaSttConfig
 from lib.stt_provider_elevenlabs import ElevenLabsRealtimeProvider, ElevenLabsSttConfig
-from lib.stt_provider_google import GoogleRealtimeProvider
+from lib.stt_provider_google import GoogleRealtimeProvider, GoogleSttConfig
 from lib.utils import setup_logging
 from lib.helper_stream_wav import stream_wav_file
 
@@ -114,7 +114,9 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
         await self._runner(provider)
 
     async def test_google(self) -> None:
-        provider = GoogleRealtimeProvider()
+        # Google uses Application Default Credentials (ADC), not an API key.
+        # Set GOOGLE_APPLICATION_CREDENTIALS env var to your service account JSON.
+        provider = GoogleRealtimeProvider(GoogleSttConfig())
         await self._runner(provider)
 
     async def test_cartesia(self) -> None:
