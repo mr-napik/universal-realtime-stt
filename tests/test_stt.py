@@ -80,7 +80,7 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
 
                 # Give some time to STT and transcript collection to wrap up (in addition to the silence).
                 # This is time after the streaming ends we wait for last transcript to arrive.
-                logger.debug("Waiting for SST task to complete for %f.1 s", FINAL_SILENCE_S * 2)
+                logger.debug("Waiting for SST task to complete for %.1f s", FINAL_SILENCE_S * 2)
                 await asyncio.sleep(FINAL_SILENCE_S * 2)
 
                 # Send a stop also to the ingest loop and collect drained transcripts.

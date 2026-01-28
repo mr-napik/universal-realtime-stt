@@ -7,25 +7,25 @@ from logging import getLogger
 from pathlib import Path
 from typing import Iterator, Optional
 
-from config import AUDIO_SAMPLE_RATE
-
-
 logger = getLogger(__name__)
 
 
-def make_silence_chunk(sample_rate: int, duration_s: float) -> bytes:
+def make_silence_chunk(duration_s: float, sample_rate: int, sample_width_bytes: int) -> bytes:
     """Create a silence audio chunk of given duration."""
-    return b"\x00\x00" * int(sample_rate * duration_s)
+    return b"\x00" * sample_width_bytes * int(sample_rate * duration_s)
 
 
-async def stream_silence(duration_s: float, audio_queue: asyncio.Queue, chunk_ms: int,
-                         realtime_factor: float = 1.0) -> int:
+async def stream_silence(duration_s: float, audio_queue: asyncio.Queue, chunk_ms: int, *,
+                         realtime_factor: float = 1.0, sample_rate: int = 16000, sample_width_bytes: int = 2) -> int:
     logger.debug(f"[WAV]: streaming leading silence chunks for {duration_s:.1f} seconds.")
+    if duration_s <= 0.0:
+        return 0
+
     total_s = 0.0
     chunk_s = chunk_ms / 1000.0
     chunks = 0
     while total_s < duration_s:
-        chunk = make_silence_chunk(AUDIO_SAMPLE_RATE, chunk_s)
+        chunk = make_silence_chunk(chunk_s, sample_rate, sample_width_bytes)
         await audio_queue.put(chunk)
         await asyncio.sleep(chunk_s * realtime_factor)
         total_s += chunk_s
@@ -67,12 +67,12 @@ def inspect_wav(path: Path) -> WavFormat:
     path = path.resolve()
     with wave.open(str(path), "rb") as wf:
         return WavFormat(channels=wf.getnchannels(), sample_width_bytes=wf.getsampwidth(),
-            sample_rate=wf.getframerate(), n_frames=wf.getnframes(), comptype=wf.getcomptype(),
-            compname=wf.getcompname(), )
+                         sample_rate=wf.getframerate(), n_frames=wf.getnframes(), comptype=wf.getcomptype(),
+                         compname=wf.getcompname(), )
 
 
 def iter_wav_pcm_chunks(path: Path, *, chunk_ms: int, expected_sample_rate: int, expected_channels: int = 1,
-        expected_sample_width_bytes: int = 2, ) -> Iterator[bytes]:
+                        expected_sample_width_bytes: int = 2, ) -> Iterator[bytes]:
     """
     Returns iterator: Yield raw PCM frames from a WAV file in fixed chunk sizes.
 
@@ -112,17 +112,39 @@ def iter_wav_pcm_chunks(path: Path, *, chunk_ms: int, expected_sample_rate: int,
 
 
 async def stream_pcm_to_queue_realtime(pcm_chunks: Iterator[bytes], audio_queue: asyncio.Queue, chunk_ms: int, *,
-        realtime_factor: float = 1.0, silence_s: float = 2.0, running: Optional[asyncio.Event] = None, ) -> int:
+                                       realtime_factor: float = 1.0, silence_s: float = 2.0,
+                                       expected_sample_rate: int = 16000, expected_sample_width_bytes: int = 2,
+                                       running: Optional[asyncio.Event] = None) -> int:
     """
-    Put PCM chunks into audio_queue with real-time-ish pacing.
+    Stream PCM audio chunks to an async queue with real-time pacing.
 
-    realtime_factor:
-      - 1.0 = realtime
-      - 0.5 = 2x faster
-      - 0.0 = no pacing sleep (still chunked)
+    Feeds pre-chunked PCM data into a queue at a configurable rate, with silence
+    padding at the start and end to help VAD detect speech boundaries. Pushes
+    None as a sentinel when streaming completes.
+
+    Args:
+        pcm_chunks: Iterator yielding raw PCM audio data as bytes.
+        audio_queue: Async queue to receive audio chunks. A None sentinel is
+            pushed when streaming completes.
+        chunk_ms: Duration of each chunk in milliseconds, used for pacing timing.
+        realtime_factor: Playback speed multiplier:
+            - 1.0 = real-time (default)
+            - 0.5 = 2x faster
+            - 0.0 = no delay between chunks (as fast as possible)
+        silence_s: Duration of silence (in seconds) to add before and after
+            the audio. Helps VAD properly detect speech start/end.
+        expected_sample_rate: Sample rate in Hz, passed to silence generation.
+        expected_sample_width_bytes: Bytes per sample (e.g., 2 for 16-bit),
+            used for silence chunk generation.
+        running: Optional asyncio.Event for cancellation. If provided and cleared,
+            streaming stops early.
+
+    Returns:
+        Total number of chunks streamed (including silence chunks).
     """
-    # consider streaming a moment of silence at the beginning, as I often see the first word cut off.
-    total_chunks_streamed = await stream_silence(silence_s, audio_queue, chunk_ms, realtime_factor)
+    # Stream a moment of silence at the beginning, as I often see the first word cut off if we start immediately.
+    total_chunks_streamed = await stream_silence(silence_s, audio_queue, chunk_ms,
+        realtime_factor=realtime_factor, sample_rate=expected_sample_rate, sample_width_bytes=expected_sample_width_bytes)
 
     cnt = 0
     for chunk in pcm_chunks:
@@ -140,7 +162,8 @@ async def stream_pcm_to_queue_realtime(pcm_chunks: Iterator[bytes], audio_queue:
     total_chunks_streamed += cnt
 
     # allow provider/VAD to finalize the "committed" transcript by sending silence at the end...
-    total_chunks_streamed += await stream_silence(silence_s, audio_queue, chunk_ms, realtime_factor)
+    total_chunks_streamed += await stream_silence(silence_s, audio_queue, chunk_ms,
+        realtime_factor=realtime_factor, sample_rate=expected_sample_rate, sample_width_bytes=expected_sample_width_bytes)
 
     # cleanly close - this is important
     logger.info(f"Wav streaming: done, sent {cnt} chunks. Pushing None to the audio queue.")
@@ -196,8 +219,12 @@ async def stream_wav_file(file: Path, audio_queue: asyncio.Queue, chunk_ms: int,
         raise ValueError(f"expected_sample_rate must be positive, got {expected_sample_rate}")
 
     pcm_chunks_iterator = iter_wav_pcm_chunks(file, chunk_ms=chunk_ms, expected_sample_rate=expected_sample_rate,
-        expected_channels=expected_channels, expected_sample_width_bytes=expected_sample_width_bytes, )
+                                              expected_channels=expected_channels,
+                                              expected_sample_width_bytes=expected_sample_width_bytes, )
 
-    # this actually starts streaming chunks to the queue and blocks until it is done
+    # This actually streams chunks to the queue and blocks until it is done.
     return await stream_pcm_to_queue_realtime(pcm_chunks_iterator, audio_queue, chunk_ms=chunk_ms,
-        realtime_factor=realtime_factor, silence_s=silence, running=running, )
+                                              realtime_factor=realtime_factor, silence_s=silence,
+                                              expected_sample_rate=expected_sample_rate,
+                                              expected_sample_width_bytes=expected_sample_width_bytes,
+                                              running=running, )
