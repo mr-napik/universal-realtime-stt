@@ -9,7 +9,7 @@ from urllib.parse import urlencode
 
 from websockets import connect, ConnectionClosedOK, ConnectionClosed
 
-from config import AUDIO_SAMPLE_RATE, STT_VAD_SILENCE_THRESHOLD_S
+from config import AUDIO_SAMPLE_RATE, AUDIO_ENCODING, STT_LANGUAGE, STT_VAD_SILENCE_THRESHOLD_S, STT_VAD_THRESHOLD
 from lib.stt_provider import RealtimeSttProvider, TranscriptEvent
 
 logger = getLogger(__name__)
@@ -17,14 +17,26 @@ logger = getLogger(__name__)
 
 @dataclass(frozen=True)
 class CartesiaSttConfig:
-    api_key: str
-    model: str = "ink-whisper"          # per Cartesia docs
-    language: str = "cs"                # ISO-639-1 (Cartesia expects "cs", not "cs-CZ")
-    encoding: str = "pcm_s16le"         # recommended by Cartesia docs
-    sample_rate: int = AUDIO_SAMPLE_RATE
-    min_volume: float = 0.15            # VAD threshold (0..1) @TODO: test STT_VAD_THRESHOLD
-    max_silence_duration_secs: float = STT_VAD_SILENCE_THRESHOLD_S  # endpointing / utterance boundary
+    """
+    Configuration for Cartesia Ink-Whisper realtime STT provider.
+
+    Provider-specific settings have defaults appropriate for Cartesia.
+    Universal STT settings (sample_rate, language, VAD params) are imported
+    from config.py but can be overridden here if needed.
+    """
+    api_key: str  # Required: passed at instantiation, not stored in config
+
+    # Provider-specific settings
+    model: str = "ink-whisper"
     base_url: str = "wss://api.cartesia.ai/stt/websocket"
+
+    # Universal STT settings (defaults from config.py, can be overridden)
+    language: str = STT_LANGUAGE  # ISO-639-1
+    encoding: str = AUDIO_ENCODING
+    sample_rate: int = AUDIO_SAMPLE_RATE
+    min_volume: float = 0.15            # VAD threshold (0..1)
+    # @TODO: this does not work, nothing is heard: min_volume: float = STT_VAD_THRESHOLD  # VAD threshold (0..1), maps to Cartesia's min_volume
+    max_silence_duration_secs: float = STT_VAD_SILENCE_THRESHOLD_S  # endpointing / utterance boundary
 
 
 class CartesiaInkProvider(RealtimeSttProvider):
@@ -43,6 +55,7 @@ class CartesiaInkProvider(RealtimeSttProvider):
         self._events_q: asyncio.Queue[Optional[TranscriptEvent]] = asyncio.Queue(maxsize=200)
         self._rx_task: Optional[asyncio.Task] = None
         self._closed = asyncio.Event()
+        self._error: Optional[Exception] = None  # Store error for propagation
 
     async def __aenter__(self) -> "CartesiaInkProvider":
         # Query params required by Cartesia streaming STT endpoint. :contentReference[oaicite:2]{index=2}
@@ -94,6 +107,8 @@ class CartesiaInkProvider(RealtimeSttProvider):
 
     async def send_audio(self, pcm_chunk: bytes) -> None:
         # Cartesia expects raw binary audio frames. :contentReference[oaicite:4]{index=4}
+        if self._error:
+            raise self._error
         if self._closed.is_set() or self._ws is None:
             logger.warning("[STT] Cartesia: cannot send audio, connection closed")
             return
@@ -115,9 +130,17 @@ class CartesiaInkProvider(RealtimeSttProvider):
             while True:
                 ev = await self._events_q.get()
                 if ev is None:
+                    # Check if we stopped due to an error
+                    if self._error:
+                        raise self._error
                     break
                 yield ev
         return _aiter()
+
+    @property
+    def error(self) -> Optional[Exception]:
+        """Return the error that caused the connection to close, if any."""
+        return self._error
 
     async def _recv_loop(self) -> None:
         try:
@@ -151,18 +174,26 @@ class CartesiaInkProvider(RealtimeSttProvider):
                     logger.info("[STT] Cartesia: received done")
                     break
 
-                # Error format: { "type": "<string>", "error": "<string>", ... } :contentReference[oaicite:7]{index=7}
-                if "error" in data:
-                    raise RuntimeError(f"Cartesia STT error: {data}")
+                # Error format: { "type": "error", "message": "<string>", "code": <int> }
+                if typ == "error":
+                    error_msg = data.get("message", str(data))
+                    error_code = int(data.get("code", 0))
+                    self._error = RuntimeError(f"Cartesia STT error (code {error_code}): {error_msg}")
+                    logger.error("[STT] Cartesia: %s", self._error)
+                    raise self._error
 
         except ConnectionClosedOK:
             logger.debug("[STT] Cartesia: session closed cleanly.")
         except ConnectionClosed as e:
             logger.warning("[STT] Cartesia: connection closed unexpectedly: %s", e)
+            if not self._error:
+                self._error = RuntimeError(f"Cartesia connection closed unexpectedly: {e}")
         except asyncio.CancelledError:
             raise
         except Exception as e:
             logger.exception("[STT] Cartesia receiver crashed: %r", e)
+            if not self._error:
+                self._error = e
         finally:
             self._closed.set()
             await self._events_q.put(None)
