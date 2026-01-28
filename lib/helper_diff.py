@@ -72,7 +72,7 @@ class DiffReport:
     @property
     def character_error_rate(self):
         """Returns character error rate in percent (based on levenshtein distance)."""
-        return round(float(self.levenshtein) / len(self.expected) * 100, 1)
+        return round(float(self.levenshtein) / len(normalize_text_for_diff(self.expected)) * 100, 1)
 
 
 def write_diff_report(

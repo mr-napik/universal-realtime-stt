@@ -20,7 +20,7 @@ class QueueFullError(Exception):
     pass
 
 
-async def _put_with_timeout(queue: asyncio.Queue, item: bytes, timeout: float = 5.0) -> None:
+async def _put_with_timeout(queue: asyncio.Queue, item: bytes | None, timeout: float = 5.0) -> None:
     """Put item to queue with timeout. Raises QueueFullError if queue stays full."""
     try:
         await asyncio.wait_for(queue.put(item), timeout=timeout)
@@ -28,7 +28,7 @@ async def _put_with_timeout(queue: asyncio.Queue, item: bytes, timeout: float = 
         raise QueueFullError(
             f"Audio queue full for {timeout}s - consumer not reading. "
             f"Queue size: {queue.qsize()}/{queue.maxsize}"
-        )
+        ) from None  # this prevents stack trace chaining
 
 
 async def stream_silence(duration_s: float, audio_queue: asyncio.Queue, chunk_ms: int, *,

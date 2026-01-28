@@ -16,6 +16,7 @@ from lib.stt import transcript_ingest_loop, init_stt_once_provider
 from lib.stt_provider import RealtimeSttProvider
 from lib.stt_provider_cartesia import CartesiaInkProvider, CartesiaSttConfig
 from lib.stt_provider_deepgram import DeepgramRealtimeProvider, DeepgramSttConfig
+from lib.stt_provider_speechmatics import SpeechmaticsRealtimeProvider, SpeechmaticsSttConfig
 from lib.stt_provider_elevenlabs import ElevenLabsRealtimeProvider, ElevenLabsSttConfig
 from lib.stt_provider_google import GoogleRealtimeProvider, GoogleSttConfig
 from lib.utils import setup_logging
@@ -109,4 +110,8 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
 
     async def test_deepgram(self) -> None:
         provider = DeepgramRealtimeProvider(DeepgramSttConfig(api_key=getenv("DEEPGRAM_API_KEY")))
+        await self._runner(provider)
+
+    async def test_speechmatics(self) -> None:
+        provider = SpeechmaticsRealtimeProvider(SpeechmaticsSttConfig(api_key=getenv("SPEECHMATICS_API_KEY")))
         await self._runner(provider)
