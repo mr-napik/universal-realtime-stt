@@ -81,7 +81,7 @@ def write_diff_report(
         got: str,
         out_path: Path,
         title: str,
-        sound_file: str,
+        detail: str,
 ) -> DiffReport:
     """
     Create a human-readable HTML diff using diff-match-patch.
@@ -163,7 +163,7 @@ def write_diff_report(
 <body>
   <h1>{_escape_html(title)}: {report.character_error_rate}% Character Error Rate</h1>
   
-  <div class='hint'>{_escape_html(sound_file)}</div>
+  <div class='hint'>{_escape_html(detail)}</div>
 
   <div class="panel">
     <h2>Diff (regardless of punctuation; red = deletions, green = insertions)</h2>

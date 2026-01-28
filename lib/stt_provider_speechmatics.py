@@ -31,7 +31,7 @@ class SpeechmaticsSttConfig:
     max_delay_s: float = STT_VAD_SILENCE_THRESHOLD_S
 
     # Optional: ask server to detect end-of-utterance via silence
-    end_of_utterance_silence_trigger_s: float = STT_VAD_SILENCE_THRESHOLD_S
+    # end_of_utterance_silence_trigger_s: float = STT_VAD_SILENCE_THRESHOLD_S
 
     # We only need finals for your pipeline; keep partials off by default.
     enable_partials: bool = True
@@ -92,12 +92,16 @@ class SpeechmaticsRealtimeProvider(RealtimeSttProvider):
         self._rx_task = asyncio.create_task(self._recv_loop())
 
         # StartRecognition
+        # max_delay (Number): Optional. Allowed between 0.7 and 4 seconds. Default is 4 seconds.
+        # This is the delay in seconds between the end of a spoken word and returning the Final transcript results.
         max_delay = float(self._cfg.max_delay_s)
         if max_delay < 0.7:
             max_delay = 0.7
         if max_delay > 4.0:
             max_delay = 4.0
 
+        # Configuration documentation
+        # https://docs.speechmatics.com/speech-to-text/realtime/output
         start_msg = {
             "message": "StartRecognition",
             "audio_format": {
@@ -109,9 +113,12 @@ class SpeechmaticsRealtimeProvider(RealtimeSttProvider):
                 "language": self._cfg.language,
                 "enable_partials": bool(self._cfg.enable_partials),
                 "max_delay": max_delay,
+                "operating_point": "enhanced",
+                "enable_entities": True,
+                # "remove_disfluencies": False,  # english only
                 # End-of-utterance detection via silence (optional but useful for "commit-like" behavior)
                 "conversation_config": {
-                    "end_of_utterance_silence_trigger": float(self._cfg.end_of_utterance_silence_trigger_s),
+                    "end_of_utterance_silence_trigger": 0,  # disabled
                 },
             },
         }

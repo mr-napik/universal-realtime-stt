@@ -79,13 +79,14 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
                 running.clear()
 
                 # calculated diff and write report file
-                report_path = OUT_PATH / f"{ts}_{pair.wav.stem}.diff.html"
+                fname = f"{ts}_{pair.wav.stem}.diff.html"
+                report_path = OUT_PATH / fname
                 report = write_diff_report(
                     expected=expected_raw,
                     got=got_raw,
                     out_path=report_path,
                     title=f"{pair.wav.name}",
-                    sound_file=f"Asset: {pair.wav}\nExpected: {pair.txt}\n",
+                    detail=f"Provider: {type(provider)}\nSound: {pair.wav}\nExpected: {pair.txt}\nReport: {fname}",
                 )
                 logger.info(f"{pair.wav.name} error rate: {report.character_error_rate:.1f}%")
 
