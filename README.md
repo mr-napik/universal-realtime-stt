@@ -1,4 +1,4 @@
-# Realtime STT Test Suite
+# Universal Realtime STT Lib
 
 Tool to test various STT providers.
 
@@ -35,8 +35,16 @@ Then restart Idea and check that the terminal automatically opens to (.venv). Th
 Then install dependencies from requirements.
 
 
+## Config Architecture
 
-## Asset Sources
+In an ideal case, universal STT configuration should be taken from config.py (which should contain universal stt parametrization that is provider independent like language, format, silences, VAD etc. - even though that each provider might use slightly different naming and notation). 
+
+The provider specific object should contain provider specific settings like model name and url. 
+
+Finally, the api key should only be taken at the moment of provider object instantiation, as that is a secret, and we do not want to handle it inside the library. Secret should really be something that the user provides at top level, so that various methods can be conveniently used without diving deep into the lib.
+
+
+## Potential Test Asset Sources
 - https://www.pametnaroda.cz/cs/archive
 - https://youtu.be/Der9UHsGinI
 - https://youtu.be/DA6mbcmEZPc
@@ -44,9 +52,10 @@ Then install dependencies from requirements.
 
 The sample file is taken from here: https://www.pametnaroda.cz/cs/vodicka-adolf-1913
 
-### Converting Assets to WAV (on Mac)
+### Converting Test Assets to WAV (on Mac)
 
-Most STT for example Eleven Labs expect PCM16000 mono:
+Most sources are in MP3 or other compressed format. Most STT for example Eleven Labs expect PCM16000 mono. Following commands can convert assets to acceptable format to run the test suite.
+
 ```
 afconvert input.mp3 output.wav -f WAVE -d LEI16@16000 -c 1 -v
 ```
