@@ -27,6 +27,7 @@ async def init_stt_once_provider(
     """
 
     logger.debug("[STT] Initializing STT once...")
+
     async def _sender() -> None:
         try:
             while conversation_running.is_set():
@@ -53,8 +54,10 @@ async def init_stt_once_provider(
         await transcript_queue.put(None)
 
     async with provider:
+        logger.debug("[STT] Provider context entered, creating sender/receiver tasks...")
         sender = asyncio.create_task(_sender())
         receiver = asyncio.create_task(_receiver())
+        logger.debug("[STT] Tasks created, awaiting sender...")
 
         try:
             await sender       # finishes sending + end_audio() signals provider to close

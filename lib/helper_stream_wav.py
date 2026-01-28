@@ -15,6 +15,22 @@ def make_silence_chunk(duration_s: float, sample_rate: int, sample_width_bytes: 
     return b"\x00" * sample_width_bytes * int(sample_rate * duration_s)
 
 
+class QueueFullError(Exception):
+    """Raised when audio queue is full and consumer is not consuming."""
+    pass
+
+
+async def _put_with_timeout(queue: asyncio.Queue, item: bytes, timeout: float = 5.0) -> None:
+    """Put item to queue with timeout. Raises QueueFullError if queue stays full."""
+    try:
+        await asyncio.wait_for(queue.put(item), timeout=timeout)
+    except asyncio.TimeoutError:
+        raise QueueFullError(
+            f"Audio queue full for {timeout}s - consumer not reading. "
+            f"Queue size: {queue.qsize()}/{queue.maxsize}"
+        )
+
+
 async def stream_silence(duration_s: float, audio_queue: asyncio.Queue, chunk_ms: int, *,
                          realtime_factor: float = 1.0, sample_rate: int = 16000, sample_width_bytes: int = 2) -> int:
     logger.debug(f"[WAV]: streaming silence chunks for {duration_s:.1f} seconds.")
@@ -26,7 +42,7 @@ async def stream_silence(duration_s: float, audio_queue: asyncio.Queue, chunk_ms
     chunks = 0
     while total_s < duration_s:
         chunk = make_silence_chunk(chunk_s, sample_rate, sample_width_bytes)
-        await audio_queue.put(chunk)
+        await _put_with_timeout(audio_queue, chunk)
         await asyncio.sleep(chunk_s * realtime_factor)
         total_s += chunk_s
         chunks += 1
@@ -150,7 +166,7 @@ async def stream_pcm_to_queue_realtime(pcm_chunks: Iterator[bytes], audio_queue:
     for chunk in pcm_chunks:
         if running is not None and not running.is_set():
             break
-        await audio_queue.put(chunk)
+        await _put_with_timeout(audio_queue, chunk)
         cnt += 1
 
         if cnt % 20 == 0:
@@ -167,7 +183,7 @@ async def stream_pcm_to_queue_realtime(pcm_chunks: Iterator[bytes], audio_queue:
 
     # cleanly close - this is important
     logger.info(f"Wav streaming: done, sent {cnt} chunks. Pushing None to the audio queue.")
-    await audio_queue.put(None)
+    await _put_with_timeout(audio_queue, None)
 
     # done
     return total_chunks_streamed

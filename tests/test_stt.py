@@ -42,7 +42,7 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
                 expected_raw = pair.txt.read_text(encoding="utf-8")
 
                 # prepare streaming machinery
-                audio_queue: asyncio.Queue = asyncio.Queue(maxsize=200)
+                audio_queue: asyncio.Queue = asyncio.Queue(maxsize=40)  # no need for long queue, we should stream near realtime
                 transcript_queue: asyncio.Queue = asyncio.Queue(maxsize=200)
                 transcript_segments: List[str] = []
                 running = asyncio.Event()
