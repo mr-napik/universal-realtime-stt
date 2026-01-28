@@ -17,7 +17,7 @@ def make_silence_chunk(duration_s: float, sample_rate: int, sample_width_bytes: 
 
 async def stream_silence(duration_s: float, audio_queue: asyncio.Queue, chunk_ms: int, *,
                          realtime_factor: float = 1.0, sample_rate: int = 16000, sample_width_bytes: int = 2) -> int:
-    logger.debug(f"[WAV]: streaming leading silence chunks for {duration_s:.1f} seconds.")
+    logger.debug(f"[WAV]: streaming silence chunks for {duration_s:.1f} seconds.")
     if duration_s <= 0.0:
         return 0
 
