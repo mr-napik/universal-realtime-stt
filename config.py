@@ -8,8 +8,8 @@ from pathlib import Path
 BASE_PATH = Path(__file__).parent
 
 # Path for test reports
-TMP_PATH = BASE_PATH / "tmp"
-TMP_PATH.mkdir(exist_ok=True)
+OUT_PATH = BASE_PATH / "out"
+OUT_PATH.mkdir(exist_ok=True)
 
 # Path to look for test assets
 ASSETS_DIR = Path(BASE_PATH / "assets")

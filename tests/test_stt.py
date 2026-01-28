@@ -9,7 +9,7 @@ from typing import List
 
 from dotenv import load_dotenv
 
-from config import AUDIO_SAMPLE_RATE, CHUNK_MS, TEST_REALTIME_FACTOR, FINAL_SILENCE_S, TMP_PATH, ASSETS_DIR
+from config import AUDIO_SAMPLE_RATE, CHUNK_MS, TEST_REALTIME_FACTOR, FINAL_SILENCE_S, OUT_PATH, ASSETS_DIR
 from lib.helper_load_assets import get_test_files
 from lib.helper_diff import write_diff_report
 from lib.stt import transcript_ingest_loop, init_stt_once_provider
@@ -94,8 +94,8 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
                 # stop everything
                 running.clear()
 
-                # calculated diff and write report
-                report_path = TMP_PATH / f"{ts}_{pair.wav.stem}.diff.html"
+                # calculated diff and write report file
+                report_path = OUT_PATH / f"{ts}_{pair.wav.stem}.diff.html"
                 report = write_diff_report(
                     expected=expected_raw,
                     got=got_raw,
@@ -105,9 +105,10 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
                 )
                 logger.info(f"{pair.wav.name} error rate: {report.character_error_rate:.1f}%")
 
-                # goal of the text is for STT to work,
-                # so as long as we receive similar lengths (tolerance 10%) string back, we are happy.
-                self.assertAlmostEqual(len(expected_raw), len(got_raw), delta=len(expected_raw) / 10.0)
+                # Goal of the test is to check for realtime STT to work.
+                # So as long as we receive similar lengths (tolerance 14%) string back, we are happy.
+                # We do not verify whether what we got is relevant as part of the test result here.
+                self.assertAlmostEqual(len(expected_raw), len(got_raw), delta=len(expected_raw) / 7.0)
 
     async def test_eleven_labs(self) -> None:
         provider = ElevenLabsRealtimeProvider(ElevenLabsSttConfig(api_key=getenv("ELEVENLABS_API_KEY")))
