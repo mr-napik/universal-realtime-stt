@@ -18,7 +18,7 @@ from lib.stt_provider_cartesia import CartesiaInkProvider, CartesiaSttConfig
 from lib.stt_provider_elevenlabs import ElevenLabsRealtimeProvider
 from lib.stt_provider_google import GoogleRealtimeProvider
 from lib.utils import setup_logging
-from lib.helper_stream_wav import iter_wav_pcm_chunks, stream_pcm_to_queue_realtime
+from lib.helper_stream_wav import stream_wav_file
 
 
 setup_logging()
@@ -61,43 +61,40 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
 
                 stt_task = asyncio.create_task(init_stt_once_provider(provider, audio_queue, transcript_queue, running))
                 ingest_task = asyncio.create_task(_ingest_transcripts_using_lib(running, transcript_queue))
-                pcm_chunks_iterator = iter_wav_pcm_chunks(
-                    pair.wav,
-                    chunk_ms=CHUNK_MS,
-                    expected_sample_rate=AUDIO_SAMPLE_RATE,
-                    expected_channels=1,
-                    expected_sample_width_bytes=2,
-                )
 
-                # this actually starts streaming chunks to the queue and runs test (as other tasks are already waiting)
-                await stream_pcm_to_queue_realtime(
-                    pcm_chunks_iterator,
+                # This actually starts streaming chunks to the queue and blocks until it is done
+                # Other tasks are already waiting to process the queue.
+                await stream_wav_file(
+                    pair.wav,
                     audio_queue,
-                    chunk_ms=CHUNK_MS,
+                    CHUNK_MS,
+                    AUDIO_SAMPLE_RATE,
                     realtime_factor=TEST_REALTIME_FACTOR,
-                    post_roll_silence_s=FINAL_SILENCE_S,
+                    silence=FINAL_SILENCE_S,
                     running=running,
                 )
 
-                # Ensure STT session ends.
+                # At this point, streaming is completed and all chunks sent.
+                # Ensure STT session ends (and task completes).
                 await stt_task
 
-                # give some time to STT and transcript collection to wrap up (in addition to silence).
-                # at least for eleven labs, we need this to be longer, otherwise we cna miss quite a lot.
+                # Give some time to STT and transcript collection to wrap up (in addition to the silence).
+                # This is time after the streaming ends we wait for last transcript to arrive.
+                logger.debug("Waiting for SST task to complete for %f.1 s", FINAL_SILENCE_S * 2)
                 await asyncio.sleep(FINAL_SILENCE_S * 2)
 
-                # Stop ingest loop and collect drained transcripts.
+                # Send a stop also to the ingest loop and collect drained transcripts.
                 await transcript_queue.put(None)
                 segments = await ingest_task
 
                 # get results
                 got_raw = " ".join(segments)
-                logger.info("Final result raw: %r", got_raw)
+                logger.info("Final transcript raw: %r", got_raw)
 
                 # stop everything
                 running.clear()
 
-                # write report
+                # calculated diff and write report
                 report_path = TMP_PATH / f"{ts}_{pair.wav.stem}.diff.html"
                 report = write_diff_report(
                     expected=expected_raw,

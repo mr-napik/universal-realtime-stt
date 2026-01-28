@@ -51,8 +51,3 @@ def setup_logging() -> Path:
 
     getLogger(__name__).info("Logging to file: %s", log_filename)
     return log_filename
-
-
-def _make_silence_chunk(sample_rate: int, duration_s: float = 0.1) -> bytes:
-    """Create a silence audio chunk of given duration."""
-    return b"\x00\x00" * int(sample_rate * duration_s)
