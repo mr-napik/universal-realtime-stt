@@ -221,9 +221,15 @@ class ElevenLabsRealtimeProvider(RealtimeSttProvider):
         except ConnectionClosedOK:
             logger.debug("[STT] ElevenLabs: session closed cleanly.")
         except ConnectionClosed as e:
-            logger.warning("[STT] ElevenLabs: connection closed unexpectedly: %s", e)
-            if not self._error:
-                self._error = RuntimeError(f"ElevenLabs connection closed unexpectedly: {e}")
+            # Close code 1000 is normal closure.
+            # Also treat as clean if we sent close and server didn't reply (rcvd is None).
+            is_clean = e.code == 1000 or (e.rcvd is None and e.sent is not None)
+            if is_clean:
+                logger.debug("[STT] ElevenLabs: session closed (code=%s, rcvd=%s).", e.code, e.rcvd)
+            else:
+                logger.warning("[STT] ElevenLabs: connection closed unexpectedly: %s", e)
+                if not self._error:
+                    self._error = RuntimeError(f"ElevenLabs connection closed unexpectedly: {e}")
         except asyncio.CancelledError:
             raise
         except Exception as e:

@@ -15,6 +15,7 @@ from lib.helper_diff import write_diff_report
 from lib.stt import transcript_ingest_loop, init_stt_once_provider
 from lib.stt_provider import RealtimeSttProvider
 from lib.stt_provider_cartesia import CartesiaInkProvider, CartesiaSttConfig
+from lib.stt_provider_deepgram import DeepgramRealtimeProvider, DeepgramSttConfig
 from lib.stt_provider_elevenlabs import ElevenLabsRealtimeProvider, ElevenLabsSttConfig
 from lib.stt_provider_google import GoogleRealtimeProvider, GoogleSttConfig
 from lib.utils import setup_logging
@@ -66,11 +67,6 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
                 # Ensure STT session ends (and task completes).
                 await stt_task
 
-                # Give some time to STT and transcript collection to wrap up (in addition to the silence).
-                # This is time after the streaming ends we wait for last transcript to arrive.
-                # logger.debug("Waiting for SST task to complete for %.1f s", FINAL_SILENCE_S * 2)
-                # await asyncio.sleep(FINAL_SILENCE_S * 2)
-
                 # Send a stop also to the ingest loop and collect drained transcripts.
                 await ingest_task
 
@@ -109,4 +105,8 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
 
     async def test_cartesia(self) -> None:
         provider = CartesiaInkProvider(CartesiaSttConfig(api_key=getenv("CARTESIA_API_KEY")))
+        await self._runner(provider)
+
+    async def test_deepgram(self) -> None:
+        provider = DeepgramRealtimeProvider(DeepgramSttConfig(api_key=getenv("DEEPGRAM_API_KEY")))
         await self._runner(provider)
