@@ -144,6 +144,7 @@ class DeepgramRealtimeProvider(RealtimeSttProvider):
         """
         try:
             await self._ws.send(json.dumps({"type": "Finalize"}))
+            await asyncio.sleep(0.25)  # give Deepgram time to flush final results
         except Exception:
             pass
 
@@ -192,7 +193,7 @@ class DeepgramRealtimeProvider(RealtimeSttProvider):
                 if typ == "Results":
                     if not data.get("is_final", False):
                         # Intermediate results - log but don't emit
-                        logger.debug("[STT] Deepgram intermediate transcript: %r", data)
+                        # logger.debug("[STT] Deepgram intermediate transcript: %r", data)
                         continue
 
                     # Transcript lives here: channel.alternatives[0].transcript
