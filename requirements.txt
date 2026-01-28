@@ -1,7 +1,16 @@
 # Core
 websockets>=16.0.0
-elevenlabs>=2.31.0
 python-dotenv>=1.2.1
-pytest>=9.0.2
 diff-match-patch>=20241021
+
+# Providers
+#
+# Cartesia
+# We do not use their library, we directly strema to webscokcet.
+#
+# Eleven Labs
+# We do not use their library, we directly strema to webscokcet.
+# elevenlabs>=2.31.0
+#
+# Google
 google-cloud-speech>=2.36.0
