@@ -224,7 +224,9 @@ class SpeechmaticsRealtimeProvider(RealtimeSttProvider):
                 if typ == "AddTranscript":
                     logger.debug("[STT] Speechmatics: AddTranscript %r", data)
                     try:
-                        text = data['results'][0]['alternatives'][0]['content']
+                        # TODO: decide what to use...
+                        # text = data['results'][0]['alternatives'][0]['content']
+                        text = data['metadata']['transcript']
                         if text:
                             await self._events_q.put(TranscriptEvent(text=text, is_final=True))
                     except Exception as e:
