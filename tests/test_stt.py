@@ -5,7 +5,7 @@ import unittest
 from datetime import datetime
 from logging import getLogger
 from os import getenv
-from typing import List
+from typing import Any, List, Type
 
 from dotenv import load_dotenv
 
@@ -13,7 +13,6 @@ from config import AUDIO_SAMPLE_RATE, CHUNK_MS, TEST_REALTIME_FACTOR, FINAL_SILE
 from lib.helper_load_assets import get_test_files
 from lib.helper_diff import write_diff_report
 from lib.stt import transcript_ingest_loop, init_stt_once_provider
-from lib.stt_provider import RealtimeSttProvider
 from lib.stt_provider_cartesia import CartesiaInkProvider, CartesiaSttConfig
 from lib.stt_provider_deepgram import DeepgramRealtimeProvider, DeepgramSttConfig
 from lib.stt_provider_speechmatics import SpeechmaticsRealtimeProvider, SpeechmaticsSttConfig
@@ -29,11 +28,11 @@ load_dotenv()
 
 
 class TestStt(unittest.IsolatedAsyncioTestCase):
-    async def _runner(self, provider: RealtimeSttProvider) -> None:
-        logger.info("Starting test runner for %s.", provider.__class__.__name__)
+    async def _runner(self, provider_cls: Type[Any], config: Any) -> None:
+        logger.info("Starting test runner for %s.", provider_cls.__name__)
 
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')  # make sure all reports from run has same timestamp
-        ts += "_" + provider.__class__.__name__
+        ts += "_" + provider_cls.__name__
 
         pairs = list(get_test_files(ASSETS_DIR))
         if not pairs:
@@ -41,6 +40,9 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
 
         for pair in pairs:
             with self.subTest(msg=pair.wav.name):
+                # Instantiate a fresh provider for each file
+                provider = provider_cls(config)
+
                 # read the expected file and normalize it.
                 expected_raw = pair.txt.read_text(encoding="utf-8")
 
@@ -98,23 +100,23 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
                 self.assertAlmostEqual(len(expected_raw), len(got_raw), delta=len(expected_raw) / 7.0)
 
     async def test_cartesia(self) -> None:
-        provider = CartesiaInkProvider(CartesiaSttConfig(api_key=getenv("CARTESIA_API_KEY")))
-        await self._runner(provider)
+        config = CartesiaSttConfig(api_key=getenv("CARTESIA_API_KEY"))
+        await self._runner(CartesiaInkProvider, config)
 
     async def test_deepgram(self) -> None:
-        provider = DeepgramRealtimeProvider(DeepgramSttConfig(api_key=getenv("DEEPGRAM_API_KEY")))
-        await self._runner(provider)
+        config = DeepgramSttConfig(api_key=getenv("DEEPGRAM_API_KEY"))
+        await self._runner(DeepgramRealtimeProvider, config)
 
     async def test_eleven_labs(self) -> None:
-        provider = ElevenLabsRealtimeProvider(ElevenLabsSttConfig(api_key=getenv("ELEVENLABS_API_KEY")))
-        await self._runner(provider)
+        config = ElevenLabsSttConfig(api_key=getenv("ELEVENLABS_API_KEY"))
+        await self._runner(ElevenLabsRealtimeProvider, config)
 
     async def test_google(self) -> None:
         # Google uses Application Default Credentials (ADC), not an API key.
         # Set GOOGLE_APPLICATION_CREDENTIALS env var to your service account JSON.
-        provider = GoogleRealtimeProvider(GoogleSttConfig())
-        await self._runner(provider)
+        config = GoogleSttConfig()
+        await self._runner(GoogleRealtimeProvider, config)
 
     async def test_speechmatics(self) -> None:
-        provider = SpeechmaticsRealtimeProvider(SpeechmaticsSttConfig(api_key=getenv("SPEECHMATICS_API_KEY")))
-        await self._runner(provider)
+        config = SpeechmaticsSttConfig(api_key=getenv("SPEECHMATICS_API_KEY"))
+        await self._runner(SpeechmaticsRealtimeProvider, config)
