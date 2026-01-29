@@ -128,9 +128,14 @@ class GoogleRealtimeProvider(RealtimeSttProvider):
                 yield speech.StreamingRecognizeRequest(audio_content=chunk)  # type: ignore[arg-type]
 
         try:
+            # This is iterator that feeds responses
             responses = client.streaming_recognize(streaming_config, request_iter())  # type: ignore[arg-type]
 
             for resp in responses:
+                # Note: Google is very verbose sending partial response after every
+                # submitted chunk. So we do not display them by default as it creates a LOT of debug.
+                # logger.debug("[STT] Google response:\n%r", resp)
+
                 # resp.results is a repeated field; iterate it.
                 for result in getattr(resp, "results", ()):
                     text = (result.alternatives[0].transcript or "").strip()
@@ -144,10 +149,6 @@ class GoogleRealtimeProvider(RealtimeSttProvider):
                             self._events_q.put(TranscriptEvent(text=text, is_final=True)),
                             loop,
                         ).result()
-
-                    # Note: Google is very verbose sending partial transcript after every
-                    # submitted chunk. So we do not display them by default as it creates a LOT
-                    # of text.
 
         except Exception as e:
             logger.exception("[STT] Google streaming crashed: %r", e)

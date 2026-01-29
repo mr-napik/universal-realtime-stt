@@ -119,7 +119,7 @@ def iter_wav_pcm_chunks(path: Path, *, chunk_ms: int, expected_sample_rate: int,
         raise ValueError("chunk_ms too small")
 
     with wave.open(str(path), "rb") as wf:
-        logger.debug("Starting streaming...")
+        logger.info("Starting streaming...")
         while True:
             data = wf.readframes(frames_per_chunk)
             if not data:

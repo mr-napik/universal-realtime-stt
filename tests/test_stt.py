@@ -30,6 +30,8 @@ load_dotenv()
 
 class TestStt(unittest.IsolatedAsyncioTestCase):
     async def _runner(self, provider: RealtimeSttProvider) -> None:
+        logger.info("Starting test runner for %s.", provider.__class__.__name__)
+
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')  # make sure all reports from run has same timestamp
         ts += "_" + provider.__class__.__name__
 

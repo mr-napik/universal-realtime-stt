@@ -57,7 +57,7 @@ async def init_stt_once_provider(
         logger.debug("[STT] Provider context entered, creating sender/receiver tasks...")
         sender = asyncio.create_task(_sender())
         receiver = asyncio.create_task(_receiver())
-        logger.debug("[STT] Tasks created, awaiting sender...")
+        logger.info("[STT] All tasks created, init successful, awaiting sender...")
 
         try:
             await sender       # finishes sending + end_audio() signals provider to close
