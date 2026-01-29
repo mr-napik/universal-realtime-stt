@@ -6,11 +6,14 @@ diff-match-patch>=20241021
 # Providers
 #
 # Cartesia
-# We do not use their library, we directly strema to webscokcet.
+# We do not use their library, we directly stream to webscokcet.
 #
 # Eleven Labs
-# We do not use their library, we directly strema to webscokcet.
+# We do not use their library, we directly stream to webscokcet.
 # elevenlabs>=2.31.0
 #
 # Google
 google-cloud-speech>=2.36.0
+#
+# Speechmatics
+# We do not use their library, we directly stream to webscokcet.

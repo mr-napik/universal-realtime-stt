@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import AsyncIterator, Protocol
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=True)
 class TranscriptEvent:
     text: str
     is_final: bool  # "committed" in your terminology
