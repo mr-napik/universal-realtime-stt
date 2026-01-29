@@ -72,7 +72,7 @@ class DiffReport:
     @property
     def character_error_rate(self):
         """Returns character error rate in percent (based on levenshtein distance)."""
-        return round(float(self.levenshtein) / len(normalize_text_for_diff(self.expected)) * 100, 1)
+        return round(float(self.levenshtein) / len(normalize_text_for_diff(self.expected)) * 100)
 
 
 def write_diff_report(
@@ -161,22 +161,22 @@ def write_diff_report(
   </style>
 </head>
 <body>
-  <h1>{_escape_html(title)}: {report.character_error_rate}% Character Error Rate</h1>
+  <h1>{_escape_html(title)}: {round(report.character_error_rate, 1)}% CER</h1>
   
   <div class='hint'>{_escape_html(detail)}</div>
 
   <div class="panel">
-    <h2>Diff (regardless of punctuation; red = deletions, green = insertions)</h2>
+    <h2>Diff (regardless of punctuation, spaces and capitalization; red = deletions, green = insertions)</h2>
     <div class="diff">{diff_html}</div>
   </div>
 
   <div class="panel">
-    <h2>Expected</h2>
+    <h2>Expected (Ground Truth)</h2>
     <pre>{_escape_html(expected)}</pre>
   </div>
 
   <div class="panel">
-    <h2>Got</h2>
+    <h2>Got (Result of STT)</h2>
     <pre>{_escape_html(got)}</pre>
   </div>
 

@@ -85,8 +85,8 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
                     expected=expected_raw,
                     got=got_raw,
                     out_path=report_path,
-                    title=f"{pair.wav.name}",
-                    detail=f"Provider: {type(provider)}\nSound: {pair.wav}\nExpected: {pair.txt}\nReport: {fname}",
+                    title=f"{pair.wav.name}: {provider.__class__.__name__}",
+                    detail=f"Provider: {provider.__class__.__name__}\nSound: {pair.wav.name}\nExpected: {pair.txt.name}\nReport: {fname}",
                 )
                 logger.info(f"{pair.wav.name} error rate: {report.character_error_rate:.1f}%")
 
@@ -94,6 +94,14 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
                 # So as long as we receive similar lengths (tolerance 14%) string back, we are happy.
                 # We do not verify whether what we got is relevant as part of the test result here.
                 self.assertAlmostEqual(len(expected_raw), len(got_raw), delta=len(expected_raw) / 7.0)
+
+    async def test_cartesia(self) -> None:
+        provider = CartesiaInkProvider(CartesiaSttConfig(api_key=getenv("CARTESIA_API_KEY")))
+        await self._runner(provider)
+
+    async def test_deepgram(self) -> None:
+        provider = DeepgramRealtimeProvider(DeepgramSttConfig(api_key=getenv("DEEPGRAM_API_KEY")))
+        await self._runner(provider)
 
     async def test_eleven_labs(self) -> None:
         provider = ElevenLabsRealtimeProvider(ElevenLabsSttConfig(api_key=getenv("ELEVENLABS_API_KEY")))
@@ -103,14 +111,6 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
         # Google uses Application Default Credentials (ADC), not an API key.
         # Set GOOGLE_APPLICATION_CREDENTIALS env var to your service account JSON.
         provider = GoogleRealtimeProvider(GoogleSttConfig())
-        await self._runner(provider)
-
-    async def test_cartesia(self) -> None:
-        provider = CartesiaInkProvider(CartesiaSttConfig(api_key=getenv("CARTESIA_API_KEY")))
-        await self._runner(provider)
-
-    async def test_deepgram(self) -> None:
-        provider = DeepgramRealtimeProvider(DeepgramSttConfig(api_key=getenv("DEEPGRAM_API_KEY")))
         await self._runner(provider)
 
     async def test_speechmatics(self) -> None:
