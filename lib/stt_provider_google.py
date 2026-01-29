@@ -138,13 +138,16 @@ class GoogleRealtimeProvider(RealtimeSttProvider):
 
                 # resp.results is a repeated field; iterate it.
                 for result in getattr(resp, "results", ()):
+                    if not result.alternatives:
+                        continue
+
                     text = (result.alternatives[0].transcript or "").strip()
                     if not text:
                         continue
 
                     # Treat is_final as "committed"
                     if bool(getattr(result, "is_final", False)):
-                        logger.debug("[STT] Google: final transcript: %s", text[:50])
+                        logger.debug("[STT] Google: final transcript received.")
                         asyncio.run_coroutine_threadsafe(
                             self._events_q.put(TranscriptEvent(text=text, is_final=True)),
                             loop,
