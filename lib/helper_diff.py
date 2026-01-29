@@ -68,11 +68,29 @@ class DiffReport:
     expected: str
     got: str
     levenshtein: int
+    # Length stats (on normalized text)
+    expected_chars: int
+    expected_words: int
+    got_chars: int
+    got_words: int
+    # Diff breakdown
+    matched_chars: int
+    inserted_chars: int
+    deleted_chars: int
 
     @property
-    def character_error_rate(self):
+    def character_error_rate(self) -> float:
         """Returns character error rate in percent (based on levenshtein distance)."""
-        return round(float(self.levenshtein) / len(normalize_text_for_diff(self.expected)) * 100)
+        if self.expected_chars == 0:
+            return 0.0
+        return round(float(self.levenshtein) / self.expected_chars * 100, 1)
+
+    @property
+    def match_percentage(self) -> float:
+        """Returns percentage of expected characters that matched."""
+        if self.expected_chars == 0:
+            return 100.0
+        return round(float(self.matched_chars) / self.expected_chars * 100, 1)
 
 
 def write_diff_report(
@@ -96,15 +114,36 @@ def write_diff_report(
     out_path = out_path.resolve()
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # Normalize texts for comparison
+    expected_norm = normalize_text_for_diff(expected)
+    got_norm = normalize_text_for_diff(got)
+
     dmp = diff_match_patch()
-    diffs = dmp.diff_main(normalize_text_for_diff(expected), normalize_text_for_diff(got))
+    diffs = dmp.diff_main(expected_norm, got_norm)
     dmp.diff_cleanupSemantic(diffs)
     levenshtein = dmp.diff_levenshtein(diffs)
 
     diff_html = dmp.diff_prettyHtml(diffs)
 
-    # report object
-    report = DiffReport(report_file=out_path, expected=expected, got=got, levenshtein=levenshtein)
+    # Calculate diff breakdown: op is -1=delete, 0=equal, 1=insert
+    matched_chars = sum(len(text) for op, text in diffs if op == 0)
+    inserted_chars = sum(len(text) for op, text in diffs if op == 1)
+    deleted_chars = sum(len(text) for op, text in diffs if op == -1)
+
+    # Report object with all stats
+    report = DiffReport(
+        report_file=out_path,
+        expected=expected,
+        got=got,
+        levenshtein=levenshtein,
+        expected_chars=len(expected_norm),
+        expected_words=len(expected_norm.split()),
+        got_chars=len(got_norm),
+        got_words=len(got_norm.split()),
+        matched_chars=matched_chars,
+        inserted_chars=inserted_chars,
+        deleted_chars=deleted_chars,
+    )
 
     # Minimal, self-contained HTML document. dmp.diff_prettyHtml returns <span> tags with inline styles.
     # We wrap it with some structure + monospace + whitespace preserving.
@@ -158,12 +197,74 @@ def write_diff_report(
       font-size: 12px;
       line-height: 1.4;
     }}
+    .stats {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin: 16px 0;
+    }}
+    .stat {{
+      padding: 12px;
+      background: #f8f9fa;
+      border: 1px solid #e6e6e6;
+      border-radius: 8px;
+    }}
+    .stat-label {{
+      font-size: 11px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }}
+    .stat-value {{
+      font-size: 20px;
+      font-weight: 600;
+      color: #333;
+      margin-top: 4px;
+    }}
+    .stat-detail {{
+      font-size: 11px;
+      color: #888;
+      margin-top: 2px;
+    }}
   </style>
 </head>
 <body>
-  <h1>{_escape_html(title)}: {round(report.character_error_rate, 1)}% CER</h1>
-  
+  <h1>{_escape_html(title)}: {report.character_error_rate}% CER</h1>
+
   <div class='hint'>{_escape_html(detail)}</div>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-label">Character Error Rate</div>
+      <div class="stat-value">{report.character_error_rate:.1f}%</div>
+      <div class="stat-detail">Levenshtein: {report.levenshtein}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Expected</div>
+      <div class="stat-value">{report.expected_chars} chars</div>
+      <div class="stat-detail">{report.expected_words} words</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Got</div>
+      <div class="stat-value">{report.got_chars} chars</div>
+      <div class="stat-detail">{report.got_words} words</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Matched</div>
+      <div class="stat-value">{report.match_percentage:.1f}%</div>
+      <div class="stat-detail">{report.matched_chars} chars</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Inserted</div>
+      <div class="stat-value">{report.inserted_chars} chars</div>
+      <div class="stat-detail">Extra in STT output</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Deleted</div>
+      <div class="stat-value">{report.deleted_chars} chars</div>
+      <div class="stat-detail">Missing from STT output</div>
+    </div>
+  </div>
 
   <div class="panel">
     <h2>Diff (regardless of punctuation, spaces and capitalization; red = deletions, green = insertions)</h2>
