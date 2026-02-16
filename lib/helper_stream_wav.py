@@ -9,7 +9,7 @@ from typing import Iterator, Optional
 
 from lib.helper_diff import DiffReport, write_diff_report
 from lib.helper_transcript_ingest import transcript_ingest_task
-from lib.stt import init_stt_once_provider
+from lib.stt import stt_session_task
 from lib.stt_provider import RealtimeSttProvider
 
 logger = getLogger(__name__)
@@ -292,8 +292,7 @@ async def transcribe_wav_realtime(
     running = asyncio.Event()
     running.set()
 
-    stt_task = asyncio.create_task(
-        init_stt_once_provider(provider, input_audio_queue, output_transcript_queue, running))
+    stt_task = asyncio.create_task(stt_session_task(provider, input_audio_queue, output_transcript_queue, running))
     ingest_task = asyncio.create_task(transcript_ingest_task(running, output_transcript_queue))
 
     await stream_wav_file(
@@ -307,10 +306,10 @@ async def transcribe_wav_realtime(
     )
 
     # At this point, streaming is completed and all chunks sent.
-    # Ensure STT session ends (and task completes).
+    # Wait till STT session ends (task completes).
     await stt_task
 
-    # Similarly wait for the ingest loop and collect drained transcripts.
+    # Similarly wait for the ingest loop to exit and collect drained transcripts.
     segments = await ingest_task
     running.clear()
 
