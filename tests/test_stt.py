@@ -9,9 +9,8 @@ from typing import Any, Type
 from dotenv import load_dotenv
 
 from config import AUDIO_SAMPLE_RATE, CHUNK_MS, TEST_REALTIME_FACTOR, FINAL_SILENCE_S, OUT_PATH, ASSETS_DIR
-from lib.helper_diff import write_diff_report
 from lib.helper_load_assets import get_test_files
-from lib.helper_stream_wav import transcribe_wav_realtime
+from lib.helper_stream_wav import transcribe_and_diff
 from lib.stt_provider_cartesia import CartesiaInkProvider, CartesiaSttConfig
 from lib.stt_provider_deepgram import DeepgramRealtimeProvider, DeepgramSttConfig
 from lib.stt_provider_elevenlabs import ElevenLabsRealtimeProvider, ElevenLabsSttConfig
@@ -40,34 +39,22 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
                 logger.info("Processing file %s.", pair.wav.name)
 
                 provider = provider_cls(config)
-                expected_raw = pair.txt.read_text(encoding="utf-8")
-
-                got_raw = await transcribe_wav_realtime(
+                report = await transcribe_and_diff(
                     provider,
                     pair.wav,
+                    pair.txt,
+                    OUT_PATH / f"{ts}_{pair.wav.stem}.diff.html",
                     chunk_ms=CHUNK_MS,
                     sample_rate=AUDIO_SAMPLE_RATE,
                     realtime_factor=TEST_REALTIME_FACTOR,
                     silence_s=FINAL_SILENCE_S,
-                )
-                logger.info("Final transcript raw: %r", got_raw)
-
-                # diff and report
-                fname = f"{ts}_{pair.wav.stem}.diff.html"
-                report_path = OUT_PATH / fname
-                report = write_diff_report(
-                    expected=expected_raw,
-                    got=got_raw,
-                    out_path=report_path,
-                    title=f"{pair.wav.name}: {provider.__class__.__name__}",
-                    detail=f"Provider: {provider.__class__.__name__}\nSound: {pair.wav.name}\nExpected: {pair.txt.name}\nReport: {fname}",
                 )
                 logger.info(f"{pair.wav.name} error rate: {report.character_error_rate:.1f}%")
 
                 # Goal of the test is to check for realtime STT to work.
                 # So as long as we receive similar lengths (tolerance 14%) string back, we are happy.
                 # We do not verify whether what we got is correct transcription as part of the test here.
-                self.assertAlmostEqual(len(expected_raw), len(got_raw), delta=len(expected_raw) / 7.0)
+                self.assertAlmostEqual(len(report.expected), len(report.got), delta=len(report.expected) / 7.0)
 
     async def test_cartesia(self) -> None:
         config = CartesiaSttConfig(api_key=getenv("CARTESIA_API_KEY"))

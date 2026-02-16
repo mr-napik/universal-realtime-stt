@@ -7,6 +7,7 @@ from logging import getLogger
 from pathlib import Path
 from typing import Iterator, Optional, List
 
+from lib.helper_diff import DiffReport, write_diff_report
 from lib.stt import init_stt_once_provider, transcript_ingest_loop
 from lib.stt_provider import RealtimeSttProvider
 
@@ -311,3 +312,59 @@ async def transcribe_wav_realtime(
     running.clear()
 
     return " ".join(resulting_transcript_segments)
+
+
+async def transcribe_and_diff(
+        provider: RealtimeSttProvider,
+        wav_path: Path,
+        txt_path: Path,
+        out_path: Path,
+        *,
+        chunk_ms: int = 200,
+        sample_rate: int = 16_000,
+        realtime_factor: float = 1.0,
+        silence_s: float = 2.0,
+) -> DiffReport:
+    """
+    Transcribe a WAV file and compare against ground-truth text.
+
+    Runs the full pipeline: stream audio to the provider, collect the
+    transcript, read the expected text, generate an HTML diff report,
+    and return the DiffReport with accuracy metrics.
+
+    Args:
+        provider: An already-instantiated (but not yet entered) RealtimeSttProvider.
+        wav_path: Path to the WAV file (must be PCM 16kHz mono 16-bit).
+        txt_path: Path to the ground-truth transcript text file.
+        out_path: Path where the HTML diff report will be written.
+        chunk_ms: Audio chunk duration in milliseconds.
+        sample_rate: Expected sample rate in Hz.
+        realtime_factor: Playback speed (1.0 = real-time, 0.0 = no delay).
+        silence_s: Silence padding (seconds) added before and after audio for VAD.
+
+    Returns:
+        DiffReport with accuracy metrics and paths.
+    """
+    provider_name = provider.__class__.__name__
+
+    transcript_raw = await transcribe_wav_realtime(
+        provider,
+        wav_path,
+        chunk_ms=chunk_ms,
+        sample_rate=sample_rate,
+        realtime_factor=realtime_factor,
+        silence_s=silence_s,
+    )
+    logger.info("Final transcript raw: %r", transcript_raw)
+
+    # read ground truth
+    expected_raw = txt_path.read_text(encoding="utf-8")
+
+    # compute and return diff
+    return write_diff_report(
+        expected=expected_raw,
+        got=transcript_raw,
+        out_path=out_path,
+        title=f"{wav_path.name}: {provider_name}",
+        detail=f"Provider: {provider_name}\nSound: {wav_path.name}\nExpected: {txt_path.name}\nReport: {out_path.name}",
+    )
