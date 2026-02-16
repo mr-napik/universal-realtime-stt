@@ -5,10 +5,11 @@ import wave
 from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
-from typing import Iterator, Optional, List
+from typing import Iterator, Optional
 
 from lib.helper_diff import DiffReport, write_diff_report
-from lib.stt import init_stt_once_provider, transcript_ingest_task
+from lib.helper_transcript_ingest import transcript_ingest_task
+from lib.stt import init_stt_once_provider
 from lib.stt_provider import RealtimeSttProvider
 
 logger = getLogger(__name__)
@@ -164,7 +165,8 @@ async def stream_pcm_to_queue_realtime(pcm_chunks: Iterator[bytes], audio_queue:
     """
     # Stream a moment of silence at the beginning, as I often see the first word cut off if we start immediately.
     total_chunks_streamed = await stream_silence(silence_s, audio_queue, chunk_ms,
-        realtime_factor=realtime_factor, sample_rate=expected_sample_rate, sample_width_bytes=expected_sample_width_bytes)
+                                                 realtime_factor=realtime_factor, sample_rate=expected_sample_rate,
+                                                 sample_width_bytes=expected_sample_width_bytes)
 
     cnt = 0
     for chunk in pcm_chunks:
@@ -183,7 +185,8 @@ async def stream_pcm_to_queue_realtime(pcm_chunks: Iterator[bytes], audio_queue:
 
     # allow provider/VAD to finalize the "committed" transcript by sending silence at the end...
     total_chunks_streamed += await stream_silence(silence_s, audio_queue, chunk_ms,
-        realtime_factor=realtime_factor, sample_rate=expected_sample_rate, sample_width_bytes=expected_sample_width_bytes)
+                                                  realtime_factor=realtime_factor, sample_rate=expected_sample_rate,
+                                                  sample_width_bytes=expected_sample_width_bytes)
 
     # cleanly close - this is important
     logger.info(f"Wav streaming: done, sent {cnt} chunks. Pushing None to the audio queue.")
@@ -289,7 +292,8 @@ async def transcribe_wav_realtime(
     running = asyncio.Event()
     running.set()
 
-    stt_task = asyncio.create_task(init_stt_once_provider(provider, input_audio_queue, output_transcript_queue, running))
+    stt_task = asyncio.create_task(
+        init_stt_once_provider(provider, input_audio_queue, output_transcript_queue, running))
     ingest_task = asyncio.create_task(transcript_ingest_task(running, output_transcript_queue))
 
     await stream_wav_file(

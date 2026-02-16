@@ -1,6 +1,6 @@
 import asyncio
 from logging import getLogger
-from typing import Optional, List
+from typing import Optional
 
 from lib.stt_provider import RealtimeSttProvider
 
@@ -68,67 +68,3 @@ async def init_stt_once_provider(
                 sender.cancel()
             if not receiver.done():
                 receiver.cancel()
-
-
-# ---------------------------------------------------------------------------
-# Transcript Ingest Loop
-# ---------------------------------------------------------------------------
-
-
-async def drain_transcript_queue(
-        queue: asyncio.Queue[Optional[str]],
-        app_running: asyncio.Event,
-) -> Optional[str]:
-    """
-    Drain all available transcripts from queue.
-
-    Returns:
-        - None: Stop signal received
-        - "": Queue was empty or only whitespace
-        - str: Combined transcript text
-    """
-    texts = []
-    try:
-        logger.debug("[INGEST] drain_transcript_queue: waiting for first item...")
-        first = await queue.get()
-        if first is None:
-            return None  # Stop signal
-
-        texts.append(first)
-        while app_running.is_set():
-            item = queue.get_nowait()
-            if item is None:
-                return None  # Stop signal mid-stream
-            texts.append(item)
-    except asyncio.QueueEmpty:
-        pass  # Drained all available
-
-    result = "\n".join(texts).strip()
-    if texts:
-        logger.debug("[INGEST] Drained %d items: %r", len(texts), result[:100])
-    return result
-
-
-async def transcript_ingest_task(
-        app_running: asyncio.Event,
-        transcript_queue: asyncio.Queue[Optional[str]],
-) -> List[str]:
-    """Ingest STT transcripts and return the collected segments."""
-    result: List[str] = []
-    try:
-        while app_running.is_set():
-            text = await drain_transcript_queue(transcript_queue, app_running)
-
-            if text is None:
-                logger.info("[INGEST] Received stop signal.")
-                break
-
-            if text:
-                logger.debug("[INGEST] Received: %s", text)
-                result.append(text)
-    except asyncio.CancelledError:
-        logger.info("Cancelled.")
-        raise
-    except Exception as e:
-        logger.exception("Crashed: %r", e)
-    return result
