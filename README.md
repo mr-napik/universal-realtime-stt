@@ -1,14 +1,11 @@
 # Universal Realtime STT Library
 
-This library allows you to run realtime STT (speech to text) with ElevenLabs, Google, Deepgram, Speechmatics and Cartesia without worrying about any provider specific details and without installing their dependencies. All you need to do is to start one asyncio task, feed sound chunks to the input sound queue and consume transcripts in string format from the output queue (LinkedIn article?).
+This library allows you to run realtime STT (speech to text) with ElevenLabs, Google, Deepgram, Speechmatics and Cartesia without worrying about any provider specific details and without installing their dependencies (except for Google). All you need to do is to start one asyncio task, feed sound chunks to the input sound queue and consume transcripts in string format from the output queue (LinkedIn article?).
 
 ## TODO
 
-### Test Case
-- Read license conditions at pametnaroda.cz and consider whether to add more files into repo. Though in principle, since we would like to test on hours of audio, storing all that in repo would not be ideal since this would make the lib unnecessarily large. Still we might include more than one file as a sample if the license allows that.
-- Get various audio files to cover approx 1 hour of data. Ideally around 5 male and 5 female voices of various types.
-- Get the ground truth (which means using eleven labs offline and then checking manually).
-- Consider how to publish potential results.
+- Get various audio files to cover approx 1 hour of data. Ideally around 10 male and 10 female voices of various types. 
+- Get the ground truth (which means using transcript from source and then checking manually).
 
 ### Code
 - Update the test case to run on multiple files. Which in general would primarily mean instantiating the provider for each.
@@ -89,24 +86,3 @@ The test app was built to extensively test various STT providers and get real wo
 3) It will compare them to a txt file of the same name as the audio file (source of ground truth) and calculate diff.
 
 **Note:** While we are running the test statically on files, it closely mimics behavior when the audio is streamed in real time, and we receive committed transcripts in real time.
-
-
-### Potential Test Asset Sources
-- https://www.pametnaroda.cz/cs/archive
-- https://youtu.be/Der9UHsGinI
-- https://youtu.be/DA6mbcmEZPc
-- https://ceskepodcasty.cz/podcast/senior-life-podcast
-
-The sample file is taken from here: https://www.pametnaroda.cz/cs/vodicka-adolf-1913
-
-### Converting Test Assets to WAV (on Mac)
-
-Most sources are in MP3 or other compressed format. Most STT for example Eleven Labs expect PCM16000 mono. Following commands can convert assets to acceptable format to run the test suite.
-
-```
-afconvert input.mp3 output.wav -f WAVE -d LEI16@16000 -c 1 -v
-```
-or
-```
-ffmpeg -i input.mp3 -ac 1 -ar 16000 -c:a pcm_s16le output.wav
-```

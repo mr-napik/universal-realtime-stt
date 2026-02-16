@@ -40,6 +40,8 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
 
         for pair in pairs:
             with self.subTest(msg=pair.wav.name):
+                logger.info("Processing file %s.", pair.wav.name)
+
                 # Instantiate a fresh provider for each file
                 provider = provider_cls(config)
 
