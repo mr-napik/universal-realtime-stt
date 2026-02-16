@@ -1,25 +1,23 @@
 from __future__ import annotations
 
-import asyncio
 import unittest
 from datetime import datetime
 from logging import getLogger
 from os import getenv
-from typing import Any, List, Type
+from typing import Any, Type
 
 from dotenv import load_dotenv
 
 from config import AUDIO_SAMPLE_RATE, CHUNK_MS, TEST_REALTIME_FACTOR, FINAL_SILENCE_S, OUT_PATH, ASSETS_DIR
 from lib.helper_load_assets import get_test_files
 from lib.helper_diff import write_diff_report
-from lib.stt import transcript_ingest_loop, init_stt_once_provider
+from lib.stt import transcribe_wav_realtime
 from lib.stt_provider_cartesia import CartesiaInkProvider, CartesiaSttConfig
 from lib.stt_provider_deepgram import DeepgramRealtimeProvider, DeepgramSttConfig
 from lib.stt_provider_speechmatics import SpeechmaticsRealtimeProvider, SpeechmaticsSttConfig
 from lib.stt_provider_elevenlabs import ElevenLabsRealtimeProvider, ElevenLabsSttConfig
 from lib.stt_provider_google import GoogleRealtimeProvider, GoogleSttConfig
 from lib.utils import setup_logging
-from lib.helper_stream_wav import stream_wav_file
 
 
 setup_logging()
@@ -42,49 +40,20 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
             with self.subTest(msg=pair.wav.name):
                 logger.info("Processing file %s.", pair.wav.name)
 
-                # Instantiate a fresh provider for each file
                 provider = provider_cls(config)
-
-                # read the expected file and normalize it.
                 expected_raw = pair.txt.read_text(encoding="utf-8")
 
-                # prepare streaming machinery
-                audio_queue: asyncio.Queue = asyncio.Queue(maxsize=40)  # no need for long queue, we should stream near realtime
-                transcript_queue: asyncio.Queue = asyncio.Queue(maxsize=200)
-                transcript_segments: List[str] = []
-                running = asyncio.Event()
-                running.set()
-
-                stt_task = asyncio.create_task(init_stt_once_provider(provider, audio_queue, transcript_queue, running))
-                ingest_task = asyncio.create_task(transcript_ingest_loop(running, transcript_queue, transcript_segments))
-
-                # This actually starts streaming chunks to the queue and blocks until it is done
-                # Other tasks are already waiting to process the queue.
-                await stream_wav_file(
+                got_raw = await transcribe_wav_realtime(
+                    provider,
                     pair.wav,
-                    audio_queue,
-                    CHUNK_MS,
-                    AUDIO_SAMPLE_RATE,
+                    chunk_ms=CHUNK_MS,
+                    sample_rate=AUDIO_SAMPLE_RATE,
                     realtime_factor=TEST_REALTIME_FACTOR,
-                    silence=FINAL_SILENCE_S,
-                    running=running,
+                    silence_s=FINAL_SILENCE_S,
                 )
-
-                # At this point, streaming is completed and all chunks sent.
-                # Ensure STT session ends (and task completes).
-                await stt_task
-
-                # Send a stop also to the ingest loop and collect drained transcripts.
-                await ingest_task
-
-                # get results
-                got_raw = " ".join(transcript_segments)
                 logger.info("Final transcript raw: %r", got_raw)
 
-                # stop everything
-                running.clear()
-
-                # calculated diff and write report file
+                # diff and report
                 fname = f"{ts}_{pair.wav.stem}.diff.html"
                 report_path = OUT_PATH / fname
                 report = write_diff_report(
@@ -98,7 +67,7 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
 
                 # Goal of the test is to check for realtime STT to work.
                 # So as long as we receive similar lengths (tolerance 14%) string back, we are happy.
-                # We do not verify whether what we got is relevant as part of the test result here.
+                # We do not verify whether what we got is correct transcription as part of the test here.
                 self.assertAlmostEqual(len(expected_raw), len(got_raw), delta=len(expected_raw) / 7.0)
 
     async def test_cartesia(self) -> None:
