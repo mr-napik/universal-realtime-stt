@@ -1,8 +1,17 @@
 # Universal Realtime STT Library
 
-A provider-agnostic library for realtime speech-to-text. Supports ElevenLabs, Google, Deepgram, Speechmatics, and Cartesia through a unified async interface — start one asyncio task, feed audio chunks to an input queue, and consume transcripts from an output queue.
+A provider-agnostic library for realtime speech-to-text. 
 
-Providers are accessed directly via WebSocket (no provider-specific SDKs, except Google which requires its own). This keeps dependencies light at the cost of additional work if a provider's API changes.
+**Supports:**
+- Cartesia https://cartesia.ai/
+- Deepgram (nova-3) https://deepgram.com/
+- ElevenLabs (scribe v2 realtime) https://elevenlabs.io/
+- Google [Cloud Speech-to-Text API](https://console.cloud.google.com/apis/library/speech.googleapis.com)
+- Speechmatics https://www.speechmatics.com/
+ 
+Offers unified async interface — start one asyncio task, feed audio chunks to an input queue, and consume transcripts from an output queue without worrying about details.
+
+Providers are accessed directly via WebSocket (no provider-specific SDKs, except Google). This keeps dependencies light.
 
 ## Installation
 
@@ -38,9 +47,18 @@ CARTESIA_API_KEY=<key>
 GOOGLE_APPLICATION_CREDENTIALS=<path-to-service-account.json>
 ```
 
-### Integration and Use
+## Integration and Use
 
-TODO — sample code showing how the lib should be used.
+The key modules have detailed docstrings explaining usage patterns and the queue-based architecture:
+
+- **`lib/stt_provider.py`** — defines the `RealtimeSttProvider` protocol. Start here to understand the provider interface and how to implement a new one (includes a full code skeleton).
+- **`lib/stt.py`** — the core `stt_session_task()` function that bridges audio input and transcript output. Docstring shows how to wire up the queues and run a session.
+- **`lib/helper_transcript_ingest.py`** — a ready-made transcript consumer and a reference for building your own real-time consumer.
+
+For end-to-end examples, see:
+
+- **`lib/helper_stream_wav.py`** — `transcribe_wav_realtime()` ties everything together: queues, STT session, transcript ingestion, and WAV streaming.
+- **`benchmark.py`** — runs all providers in parallel with result collation into a TSV report.
 
 ## Architecture
 
@@ -98,8 +116,6 @@ ffmpeg -i input.mp3 -ac 1 -ar 16000 -c:a pcm_s16le output.wav
 - Get the ground truth (use transcript from source, then check manually)
 
 ### Code
-- Update the code to aggregate results for test cases into one file for a nice overview (this might only be needed for the larger test, not the unit test suite)
-- Consider whether to make the large-scale test a standalone app rather than a test case — with lower logging and the ability to run different providers simultaneously to save time (ideally all providers in parallel)
 - Verify configuration and retrieval of transcripts (as with Speechmatics, where we initially did not capture everything returned) — especially Google might suffer from a similar problem
 - Optionally install all provider SDKs in a separate project and verify if there is something to improve (limit to providers we would consider using)
 
