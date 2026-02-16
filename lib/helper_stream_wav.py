@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Iterator, Optional, List
 
 from lib.helper_diff import DiffReport, write_diff_report
-from lib.stt import init_stt_once_provider, transcript_ingest_loop
+from lib.stt import init_stt_once_provider, transcript_ingest_task
 from lib.stt_provider import RealtimeSttProvider
 
 logger = getLogger(__name__)
@@ -286,12 +286,11 @@ async def transcribe_wav_realtime(
     """
     input_audio_queue: asyncio.Queue = asyncio.Queue(maxsize=40)
     output_transcript_queue: asyncio.Queue = asyncio.Queue(maxsize=200)
-    resulting_transcript_segments: List[str] = []
     running = asyncio.Event()
     running.set()
 
     stt_task = asyncio.create_task(init_stt_once_provider(provider, input_audio_queue, output_transcript_queue, running))
-    ingest_task = asyncio.create_task(transcript_ingest_loop(running, output_transcript_queue, resulting_transcript_segments))
+    ingest_task = asyncio.create_task(transcript_ingest_task(running, output_transcript_queue))
 
     await stream_wav_file(
         wav_path,
@@ -308,10 +307,10 @@ async def transcribe_wav_realtime(
     await stt_task
 
     # Similarly wait for the ingest loop and collect drained transcripts.
-    await ingest_task
+    segments = await ingest_task
     running.clear()
 
-    return " ".join(resulting_transcript_segments)
+    return " ".join(segments)
 
 
 async def transcribe_and_diff(

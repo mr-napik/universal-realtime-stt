@@ -91,7 +91,6 @@ async def drain_transcript_queue(
     try:
         logger.debug("[INGEST] drain_transcript_queue: waiting for first item...")
         first = await queue.get()
-        # logger.debug("[INGEST] drain_transcript_queue: got first item: %r", first[:50] if first else first)
         if first is None:
             return None  # Stop signal
 
@@ -110,43 +109,26 @@ async def drain_transcript_queue(
     return result
 
 
-async def transcript_ingest_step(
+async def transcript_ingest_task(
         app_running: asyncio.Event,
         transcript_queue: asyncio.Queue[Optional[str]],
-        result: List[str],
-) -> bool:
-    """
-    Process one batch of transcripts.
-
-    Returns False if should stop, True to continue.
-    """
-    text = await drain_transcript_queue(transcript_queue, app_running)
-
-    if text is None:
-        logger.info("[INGEST] Received stop signal.")
-        return False
-
-    if not text:
-        return True  # Empty batch, continue
-
-    logger.debug("[INGEST] Received: %s", text)
-    result.append(text)
-    return True
-
-
-async def transcript_ingest_loop(
-        app_running: asyncio.Event,
-        transcript_queue: asyncio.Queue[Optional[str]],
-        result: List[str],
-) -> None:
-    """Ingest STT transcripts into result lit of strings."""
+) -> List[str]:
+    """Ingest STT transcripts and return the collected segments."""
+    result: List[str] = []
     try:
         while app_running.is_set():
-            should_continue = await transcript_ingest_step(app_running, transcript_queue, result)
-            if not should_continue:
+            text = await drain_transcript_queue(transcript_queue, app_running)
+
+            if text is None:
+                logger.info("[INGEST] Received stop signal.")
                 break
+
+            if text:
+                logger.debug("[INGEST] Received: %s", text)
+                result.append(text)
     except asyncio.CancelledError:
         logger.info("Cancelled.")
         raise
     except Exception as e:
         logger.exception("Crashed: %r", e)
+    return result
