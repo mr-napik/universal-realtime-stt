@@ -9,16 +9,15 @@ from typing import Any, Type
 from dotenv import load_dotenv
 
 from config import AUDIO_SAMPLE_RATE, CHUNK_MS, TEST_REALTIME_FACTOR, FINAL_SILENCE_S, OUT_PATH, ASSETS_DIR
-from lib.helper_load_assets import get_test_files
 from lib.helper_diff import write_diff_report
-from lib.stt import transcribe_wav_realtime
+from lib.helper_load_assets import get_test_files
+from lib.helper_stream_wav import transcribe_wav_realtime
 from lib.stt_provider_cartesia import CartesiaInkProvider, CartesiaSttConfig
 from lib.stt_provider_deepgram import DeepgramRealtimeProvider, DeepgramSttConfig
-from lib.stt_provider_speechmatics import SpeechmaticsRealtimeProvider, SpeechmaticsSttConfig
 from lib.stt_provider_elevenlabs import ElevenLabsRealtimeProvider, ElevenLabsSttConfig
 from lib.stt_provider_google import GoogleRealtimeProvider, GoogleSttConfig
+from lib.stt_provider_speechmatics import SpeechmaticsRealtimeProvider, SpeechmaticsSttConfig
 from lib.utils import setup_logging
-
 
 setup_logging()
 logger = getLogger(__name__)

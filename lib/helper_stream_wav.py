@@ -5,7 +5,10 @@ import wave
 from dataclasses import dataclass
 from logging import getLogger
 from pathlib import Path
-from typing import Iterator, Optional
+from typing import Iterator, Optional, List
+
+from lib.stt import init_stt_once_provider, transcript_ingest_loop
+from lib.stt_provider import RealtimeSttProvider
 
 logger = getLogger(__name__)
 
@@ -244,3 +247,67 @@ async def stream_wav_file(file: Path, audio_queue: asyncio.Queue, chunk_ms: int,
                                               expected_sample_rate=expected_sample_rate,
                                               expected_sample_width_bytes=expected_sample_width_bytes,
                                               running=running, )
+
+
+# ---------------------------------------------------------------------------
+# High-level: transcribe a WAV file (this is more useful for testing)
+# ---------------------------------------------------------------------------
+
+
+async def transcribe_wav_realtime(
+        provider: RealtimeSttProvider,
+        wav_path: Path,
+        *,
+        chunk_ms: int = 200,
+        sample_rate: int = 16_000,
+        realtime_factor: float = 1.0,
+        silence_s: float = 2.0,
+) -> str:
+    """
+    Transcribe a WAV file using the given STT provider.
+    This is more for tests, since it reads file from the disk
+    and then streams it in realtime pace.
+
+    Sets up the streaming pipeline (queues, sender/receiver tasks),
+    streams audio with real-time pacing, collects committed transcripts,
+    and returns the joined result.
+
+    Args:
+        provider: An already-instantiated (but not yet entered) RealtimeSttProvider.
+        wav_path: Path to the WAV file (must be PCM 16kHz mono 16-bit).
+        chunk_ms: Audio chunk duration in milliseconds.
+        sample_rate: Expected sample rate in Hz.
+        realtime_factor: Playback speed (1.0 = real-time, 0.0 = no delay).
+        silence_s: Silence padding (seconds) added before and after audio for VAD.
+
+    Returns:
+        The full transcript as a single string (segments joined by space).
+    """
+    input_audio_queue: asyncio.Queue = asyncio.Queue(maxsize=40)
+    output_transcript_queue: asyncio.Queue = asyncio.Queue(maxsize=200)
+    resulting_transcript_segments: List[str] = []
+    running = asyncio.Event()
+    running.set()
+
+    stt_task = asyncio.create_task(init_stt_once_provider(provider, input_audio_queue, output_transcript_queue, running))
+    ingest_task = asyncio.create_task(transcript_ingest_loop(running, output_transcript_queue, resulting_transcript_segments))
+
+    await stream_wav_file(
+        wav_path,
+        input_audio_queue,
+        chunk_ms,
+        sample_rate,
+        realtime_factor=realtime_factor,
+        silence=silence_s,
+        running=running,
+    )
+
+    # At this point, streaming is completed and all chunks sent.
+    # Ensure STT session ends (and task completes).
+    await stt_task
+
+    # Similarly wait for the ingest loop and collect drained transcripts.
+    await ingest_task
+    running.clear()
+
+    return " ".join(resulting_transcript_segments)
