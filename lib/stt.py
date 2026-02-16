@@ -129,7 +129,7 @@ async def transcript_ingest_step(
     if not text:
         return True  # Empty batch, continue
 
-    logger.info("[INGEST] Received: %s", text)
+    logger.debug("[INGEST] Received: %s", text)
     result.append(text)
     return True
 
@@ -139,7 +139,7 @@ async def transcript_ingest_loop(
         transcript_queue: asyncio.Queue[Optional[str]],
         result: List[str],
 ) -> None:
-    """Ingest STT transcripts into ConversationLog."""
+    """Ingest STT transcripts into result lit of strings."""
     try:
         while app_running.is_set():
             should_continue = await transcript_ingest_step(app_running, transcript_queue, result)
