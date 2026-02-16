@@ -1,3 +1,16 @@
+"""
+Smoke tests for STT providers.
+
+Each test method exercises one provider end-to-end: streams every WAV asset
+in real time, collects the transcript, and asserts that the output length is
+within 14% of the expected ground truth. The goal is to verify that the
+provider connection and real-time pipeline work — not to measure accuracy
+(see benchmark.py for that).
+
+Tests run sequentially (one provider at a time). Run a single provider with::
+
+    pytest tests/test_stt.py::TestStt::test_deepgram -v
+"""
 from __future__ import annotations
 
 import unittest
@@ -10,7 +23,7 @@ from dotenv import load_dotenv
 
 from config import AUDIO_SAMPLE_RATE, CHUNK_MS, TEST_REALTIME_FACTOR, FINAL_SILENCE_S, OUT_PATH, ASSETS_DIR
 from helpers.load_assets import get_test_files
-from helpers.benchmark import transcribe_and_diff
+from helpers.transcribe import transcribe_and_diff
 from lib.stt_provider_cartesia import CartesiaInkProvider, CartesiaSttConfig
 from lib.stt_provider_deepgram import DeepgramRealtimeProvider, DeepgramSttConfig
 from lib.stt_provider_elevenlabs import ElevenLabsRealtimeProvider, ElevenLabsSttConfig
@@ -25,6 +38,13 @@ load_dotenv()
 
 class TestStt(unittest.IsolatedAsyncioTestCase):
     async def _runner(self, provider_cls: Type[Any], config: Any) -> None:
+        """
+        Stream all asset files through a provider and assert output length.
+
+        For each WAV/TXT pair, instantiates the provider, runs the full
+        transcribe-and-diff pipeline, writes an HTML diff report to out/,
+        and checks that the transcript length is within 14% of expected.
+        """
         logger.info("Starting test runner for %s.", provider_cls.__name__)
 
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')  # make sure all reports from run has same timestamp

@@ -1,3 +1,10 @@
+"""
+Shared utilities — logging setup.
+
+Configures dual-output logging: console (all levels) and a timestamped file
+in log/. Project modules (lib.*) log at DEBUG; third-party libraries are
+filtered to INFO+ in the file handler to keep logs readable.
+"""
 from datetime import datetime
 from logging import getLogger, basicConfig, DEBUG, INFO, FileHandler, Formatter, Filter
 from pathlib import Path
