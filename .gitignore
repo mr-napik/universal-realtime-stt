@@ -2,6 +2,10 @@
 .env*
 stt-test-*.json
 
+# asset - do not include sound files
+assets/*.wav
+assets/*.txt
+
 # temp
 tmp/
 
