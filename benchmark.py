@@ -46,9 +46,9 @@ from typing import Any, Type, List
 from dotenv import load_dotenv
 
 from config import AUDIO_SAMPLE_RATE, CHUNK_MS, TEST_REALTIME_FACTOR, FINAL_SILENCE_S, OUT_PATH, ASSETS_DIR
-from lib.helper_diff import DiffReport
-from lib.helper_load_assets import get_test_files, AssetPair
-from lib.helper_stream_wav import transcribe_and_diff
+from helpers.diff import DiffReport
+from helpers.load_assets import get_test_files, AssetPair
+from helpers.benchmark import transcribe_and_diff
 from lib.stt_provider_cartesia import CartesiaInkProvider, CartesiaSttConfig
 from lib.stt_provider_deepgram import DeepgramRealtimeProvider, DeepgramSttConfig
 from lib.stt_provider_elevenlabs import ElevenLabsRealtimeProvider, ElevenLabsSttConfig
