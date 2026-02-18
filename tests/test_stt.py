@@ -74,7 +74,7 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
                 # Goal of the test is to check for realtime STT to work.
                 # So as long as we receive similar lengths (tolerance 14%) string back, we are happy.
                 # We do not verify whether what we got is correct transcription as part of the test here.
-                self.assertAlmostEqual(len(report.expected), len(report.got), delta=len(report.expected) / 7.0)
+                self.assertAlmostEqual(len(report.text_expected), len(report.text_got), delta=len(report.text_expected) / 7.0)
 
     async def test_cartesia(self) -> None:
         config = CartesiaSttConfig(api_key=getenv("CARTESIA_API_KEY"))

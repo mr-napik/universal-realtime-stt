@@ -24,7 +24,7 @@ Architecture
 3. **Result collation** — every (provider, file) pair produces a DiffReport.
    These are flattened into a single list, sorted by provider then file,
    and written as a TSV file to the `out/` directory. The TSV includes:
-   provider, file, expected_chars, got_chars, CER%, match%, levenshtein,
+   provider, file, chars_expected, chars_got, CER%, match%, char_levenshtein,
    matched/inserted/deleted char counts, and the path to the HTML diff.
 
 Usage
@@ -163,14 +163,14 @@ TSV_HEADER = "\t".join([
     "wer_pct",
     "cer_pct",
     "match_pct",
-    "expected_chars",
-    "got_chars",
-    "levenshtein",
-    "matched_chars",
-    "inserted_chars",
-    "deleted_chars",
-    "expected_words",
-    "got_words",
+    "chars_expected",
+    "chars_got",
+    "char_levenshtein",
+    "chars_matched",
+    "chars_inserted",
+    "chars_deleted",
+    "words_expected",
+    "words_got",
     "word_levenshtein",
     "diff_report",
     "error",
@@ -193,14 +193,14 @@ def result_to_tsv_row(r: BenchmarkResult) -> str:
         f"{rp.word_error_rate:.1f}",
         f"{rp.character_error_rate:.1f}",
         f"{rp.match_percentage:.1f}",
-        str(rp.expected_chars),
-        str(rp.got_chars),
-        str(rp.levenshtein),
-        str(rp.matched_chars),
-        str(rp.inserted_chars),
-        str(rp.deleted_chars),
-        str(rp.expected_words),
-        str(rp.got_words),
+        str(rp.chars_expected),
+        str(rp.chars_got),
+        str(rp.char_levenshtein),
+        str(rp.chars_matched),
+        str(rp.chars_inserted),
+        str(rp.chars_deleted),
+        str(rp.words_expected),
+        str(rp.words_got),
         str(rp.word_levenshtein),
         str(rp.report_file.name),
         "",
@@ -251,7 +251,7 @@ async def main() -> None:
     for r in sorted(all_results, key=lambda x: (x.provider_name, x.file_name)):
         if r.report:
             rp = r.report
-            print(f"{r.provider_name:<16} {r.file_name:<14} {rp.word_error_rate:>5.1f}% {rp.character_error_rate:>5.1f}% {rp.match_percentage:>6.1f}% {rp.expected_chars:>5} {rp.got_chars:>5}")
+            print(f"{r.provider_name:<16} {r.file_name:<14} {rp.word_error_rate:>5.1f}% {rp.character_error_rate:>5.1f}% {rp.match_percentage:>6.1f}% {rp.chars_expected:>5} {rp.chars_got:>5}")
         else:
             print(f"{r.provider_name:<16} {r.file_name:<14} {'FAILED':>6}  {r.error or ''}")
     print(f"{'=' * 76}")

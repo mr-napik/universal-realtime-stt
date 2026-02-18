@@ -80,41 +80,42 @@ def _escape_html(s: Optional[str]) -> str:
 @dataclass(frozen=True)
 class DiffReport:
     report_file: Path
-    expected: str
-    got: str
-    levenshtein: int
+    text_expected: str
+    text_got: str
+
+    char_levenshtein: int
     # Length stats (on normalized text)
-    expected_chars: int
-    expected_words: int
-    got_chars: int
-    got_words: int
+    chars_expected: int
+    words_expected: int
+    chars_got: int
+    words_got: int
     # Diff breakdown
-    matched_chars: int
-    inserted_chars: int
-    deleted_chars: int
+    chars_matched: int
+    chars_inserted: int
+    chars_deleted: int
     # Word-level error
     word_levenshtein: int
 
     @property
     def character_error_rate(self) -> float:
         """Returns character error rate in percent (based on levenshtein distance)."""
-        if self.expected_chars == 0:
+        if self.chars_expected == 0:
             return 0.0
-        return round(float(self.levenshtein) / self.expected_chars * 100, 1)
+        return round(float(self.char_levenshtein) / self.chars_expected * 100, 1)
 
     @property
     def word_error_rate(self) -> float:
         """Returns word error rate in percent (based on word-level levenshtein distance)."""
-        if self.expected_words == 0:
+        if self.words_expected == 0:
             return 0.0
-        return round(float(self.word_levenshtein) / self.expected_words * 100, 1)
+        return round(float(self.word_levenshtein) / self.words_expected * 100, 1)
 
     @property
     def match_percentage(self) -> float:
         """Returns percentage of expected characters that matched."""
-        if self.expected_chars == 0:
+        if self.chars_expected == 0:
             return 100.0
-        return round(float(self.matched_chars) / self.expected_chars * 100, 1)
+        return round(float(self.chars_matched) / self.chars_expected * 100, 1)
 
 
 def write_diff_report(
@@ -162,16 +163,16 @@ def write_diff_report(
     # Report object with all stats
     report = DiffReport(
         report_file=out_path,
-        expected=expected,
-        got=got,
-        levenshtein=levenshtein,
-        expected_chars=len(expected_norm),
-        expected_words=len(expected_words),
-        got_chars=len(got_norm),
-        got_words=len(got_words),
-        matched_chars=matched_chars,
-        inserted_chars=inserted_chars,
-        deleted_chars=deleted_chars,
+        text_expected=expected,
+        text_got=got,
+        char_levenshtein=levenshtein,
+        chars_expected=len(expected_norm),
+        words_expected=len(expected_words),
+        chars_got=len(got_norm),
+        words_got=len(got_words),
+        chars_matched=matched_chars,
+        chars_inserted=inserted_chars,
+        chars_deleted=deleted_chars,
         word_levenshtein=word_lev,
     )
 
@@ -272,31 +273,31 @@ def write_diff_report(
     <div class="stat">
       <div class="stat-label">Character Error Rate</div>
       <div class="stat-value">{report.character_error_rate:.1f}%</div>
-      <div class="stat-detail">Char Levenshtein: {report.levenshtein}</div>
+      <div class="stat-detail">Char Levenshtein: {report.char_levenshtein}</div>
     </div>
     <div class="stat">
       <div class="stat-label">Expected</div>
-      <div class="stat-value">{report.expected_chars} chars</div>
-      <div class="stat-detail">{report.expected_words} words</div>
+      <div class="stat-value">{report.chars_expected} chars</div>
+      <div class="stat-detail">{report.words_expected} words</div>
     </div>
     <div class="stat">
       <div class="stat-label">Got</div>
-      <div class="stat-value">{report.got_chars} chars</div>
-      <div class="stat-detail">{report.got_words} words</div>
+      <div class="stat-value">{report.chars_got} chars</div>
+      <div class="stat-detail">{report.words_got} words</div>
     </div>
     <div class="stat">
       <div class="stat-label">Matched</div>
       <div class="stat-value">{report.match_percentage:.1f}%</div>
-      <div class="stat-detail">{report.matched_chars} chars</div>
+      <div class="stat-detail">{report.chars_matched} chars</div>
     </div>
     <div class="stat">
       <div class="stat-label">Inserted</div>
-      <div class="stat-value">{report.inserted_chars} chars</div>
+      <div class="stat-value">{report.chars_inserted} chars</div>
       <div class="stat-detail">Extra in STT output</div>
     </div>
     <div class="stat">
       <div class="stat-label">Deleted</div>
-      <div class="stat-value">{report.deleted_chars} chars</div>
+      <div class="stat-value">{report.chars_deleted} chars</div>
       <div class="stat-detail">Missing from STT output</div>
     </div>
   </div>
