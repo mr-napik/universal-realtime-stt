@@ -157,61 +157,26 @@ async def run_provider(spec: ProviderSpec, pairs: list[AssetPair], ts: str) -> l
 # TSV report writer
 # ---------------------------------------------------------------------------
 
-TSV_HEADER = "\t".join([
-    "provider",
-    "file",
-    "wer_pct",
-    "cer_pct",
-    "match_pct",
-    "chars_expected",
-    "chars_got",
-    "char_levenshtein",
-    "chars_matched",
-    "chars_inserted",
-    "chars_deleted",
-    "words_expected",
-    "words_got",
-    "word_levenshtein",
-    "diff_report",
-    "error",
-])
-
-
-def result_to_tsv_row(r: BenchmarkResult) -> str:
-    if r.report is None:
-        return "\t".join([
-            r.provider_name,
-            r.file_name,
-            "", "", "", "", "", "", "", "", "", "", "", "",
-            "",
-            r.error or "unknown error",
-        ])
-    rp = r.report
-    return "\t".join([
-        r.provider_name,
-        r.file_name,
-        f"{rp.word_error_rate:.1f}",
-        f"{rp.character_error_rate:.1f}",
-        f"{rp.match_percentage:.1f}",
-        str(rp.chars_expected),
-        str(rp.chars_got),
-        str(rp.char_levenshtein),
-        str(rp.chars_matched),
-        str(rp.chars_inserted),
-        str(rp.chars_deleted),
-        str(rp.words_expected),
-        str(rp.words_got),
-        str(rp.word_levenshtein),
-        str(rp.report_file.name),
-        "",
-    ])
-
-
 def write_tsv(results: list[BenchmarkResult], ts: str) -> Path:
+    """Write benchmark results to TSV. Columns are derived from DiffReport.to_metrics_dict()."""
     results_sorted = sorted(results, key=lambda r: (r.provider_name, r.file_name))
+
+    # Discover metric columns from the first successful report
+    sample = next((r.report for r in results_sorted if r.report), None)
+    metric_cols = list(sample.to_metrics_dict()) if sample else []
+
+    header = ["provider", "file"] + metric_cols + ["diff_report", "error"]
+    rows = ["\t".join(header)]
+    for r in results_sorted:
+        if r.report:
+            metrics = r.report.to_metrics_dict()
+            row = [r.provider_name, r.file_name] + [metrics[c] for c in metric_cols] + [r.report.report_file.name, ""]
+        else:
+            row = [r.provider_name, r.file_name] + [""] * len(metric_cols) + ["", r.error or "unknown error"]
+        rows.append("\t".join(row))
+
     tsv_path = OUT_PATH / f"{ts}_benchmark.tsv"
-    lines = [TSV_HEADER] + [result_to_tsv_row(r) for r in results_sorted]
-    tsv_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    tsv_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
     return tsv_path
 
 

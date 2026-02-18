@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import Optional
 
@@ -116,6 +116,24 @@ class DiffReport:
         if self.chars_expected == 0:
             return 100.0
         return round(float(self.chars_matched) / self.chars_expected * 100, 1)
+
+    def to_metrics_dict(self) -> dict[str, str]:
+        """Export all numeric fields and computed properties as an ordered dict of formatted strings.
+
+        Skips str/Path fields (raw texts, report path). Includes @property computed metrics.
+        Column order follows declaration order — add new fields/properties and they appear automatically.
+        """
+        d: dict[str, str] = {}
+        for f in fields(self):
+            val = getattr(self, f.name)
+            if isinstance(val, (str, Path)):
+                continue
+            d[f.name] = str(val)
+        for name, obj in type(self).__dict__.items():
+            if isinstance(obj, property):
+                val = getattr(self, name)
+                d[name] = f"{val:.1f}" if isinstance(val, float) else str(val)
+        return d
 
 
 def write_diff_report(
