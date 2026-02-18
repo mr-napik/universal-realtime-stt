@@ -69,7 +69,7 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
                     realtime_factor=TEST_REALTIME_FACTOR,
                     silence_s=FINAL_SILENCE_S,
                 )
-                logger.info(f"{pair.wav.name} error rate: {report.character_error_rate:.1f}%")
+                logger.info(f"{pair.wav.name} WER: {report.word_error_rate:.1f}%, CER: {report.character_error_rate:.1f}%")
 
                 # Goal of the test is to check for realtime STT to work.
                 # So as long as we receive similar lengths (tolerance 14%) string back, we are happy.

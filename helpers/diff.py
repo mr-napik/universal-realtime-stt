@@ -50,6 +50,21 @@ def normalize_text_for_diff(s: str, remove_punctuation: bool = True) -> str:
     return " ".join(s.strip().split()).lower()
 
 
+def _word_levenshtein(ref: list[str], hyp: list[str]) -> int:
+    """Word-level Levenshtein distance (standard DP)."""
+    n, m = len(ref), len(hyp)
+    dp = list(range(m + 1))
+    for i in range(1, n + 1):
+        prev, dp[0] = dp[0], i
+        for j in range(1, m + 1):
+            prev, dp[j] = dp[j], min(
+                dp[j] + 1,           # deletion
+                dp[j - 1] + 1,       # insertion
+                prev + (ref[i - 1] != hyp[j - 1]),  # substitution
+            )
+    return dp[m]
+
+
 def _escape_html(s: Optional[str]) -> str:
     if s is None:
         return ""
@@ -77,6 +92,8 @@ class DiffReport:
     matched_chars: int
     inserted_chars: int
     deleted_chars: int
+    # Word-level error
+    word_levenshtein: int
 
     @property
     def character_error_rate(self) -> float:
@@ -84,6 +101,13 @@ class DiffReport:
         if self.expected_chars == 0:
             return 0.0
         return round(float(self.levenshtein) / self.expected_chars * 100, 1)
+
+    @property
+    def word_error_rate(self) -> float:
+        """Returns word error rate in percent (based on word-level levenshtein distance)."""
+        if self.expected_words == 0:
+            return 0.0
+        return round(float(self.word_levenshtein) / self.expected_words * 100, 1)
 
     @property
     def match_percentage(self) -> float:
@@ -130,6 +154,11 @@ def write_diff_report(
     inserted_chars = sum(len(text) for op, text in diffs if op == 1)
     deleted_chars = sum(len(text) for op, text in diffs if op == -1)
 
+    # Word-level error rate (industry-standard WER)
+    expected_words = expected_norm.split()
+    got_words = got_norm.split()
+    word_lev = _word_levenshtein(expected_words, got_words)
+
     # Report object with all stats
     report = DiffReport(
         report_file=out_path,
@@ -137,12 +166,13 @@ def write_diff_report(
         got=got,
         levenshtein=levenshtein,
         expected_chars=len(expected_norm),
-        expected_words=len(expected_norm.split()),
+        expected_words=len(expected_words),
         got_chars=len(got_norm),
-        got_words=len(got_norm.split()),
+        got_words=len(got_words),
         matched_chars=matched_chars,
         inserted_chars=inserted_chars,
         deleted_chars=deleted_chars,
+        word_levenshtein=word_lev,
     )
 
     # Minimal, self-contained HTML document. dmp.diff_prettyHtml returns <span> tags with inline styles.
@@ -229,15 +259,20 @@ def write_diff_report(
   </style>
 </head>
 <body>
-  <h1>{_escape_html(title)}: {report.character_error_rate}% CER</h1>
+  <h1>{_escape_html(title)}: {report.word_error_rate}% WER / {report.character_error_rate}% CER</h1>
 
   <div class='hint'>{_escape_html(detail)}</div>
 
   <div class="stats">
     <div class="stat">
+      <div class="stat-label">Word Error Rate</div>
+      <div class="stat-value">{report.word_error_rate:.1f}%</div>
+      <div class="stat-detail">Word Levenshtein: {report.word_levenshtein}</div>
+    </div>
+    <div class="stat">
       <div class="stat-label">Character Error Rate</div>
       <div class="stat-value">{report.character_error_rate:.1f}%</div>
-      <div class="stat-detail">Levenshtein: {report.levenshtein}</div>
+      <div class="stat-detail">Char Levenshtein: {report.levenshtein}</div>
     </div>
     <div class="stat">
       <div class="stat-label">Expected</div>

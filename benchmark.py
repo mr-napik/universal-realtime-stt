@@ -144,7 +144,7 @@ async def run_provider(spec: ProviderSpec, pairs: list[AssetPair], ts: str) -> l
                 realtime_factor=TEST_REALTIME_FACTOR,
                 silence_s=FINAL_SILENCE_S,
             )
-            logger.info("[%s] %s — CER: %.1f%%", spec.name, pair.wav.name, report.character_error_rate)
+            logger.info("[%s] %s — WER: %.1f%%, CER: %.1f%%", spec.name, pair.wav.name, report.word_error_rate, report.character_error_rate)
             results.append(BenchmarkResult(spec.name, pair.wav.name, report, None))
         except Exception as exc:
             logger.error("[%s] %s — FAILED: %s", spec.name, pair.wav.name, exc)
@@ -160,6 +160,7 @@ async def run_provider(spec: ProviderSpec, pairs: list[AssetPair], ts: str) -> l
 TSV_HEADER = "\t".join([
     "provider",
     "file",
+    "wer_pct",
     "cer_pct",
     "match_pct",
     "expected_chars",
@@ -170,6 +171,7 @@ TSV_HEADER = "\t".join([
     "deleted_chars",
     "expected_words",
     "got_words",
+    "word_levenshtein",
     "diff_report",
     "error",
 ])
@@ -180,7 +182,7 @@ def result_to_tsv_row(r: BenchmarkResult) -> str:
         return "\t".join([
             r.provider_name,
             r.file_name,
-            "", "", "", "", "", "", "", "", "", "",
+            "", "", "", "", "", "", "", "", "", "", "", "",
             "",
             r.error or "unknown error",
         ])
@@ -188,6 +190,7 @@ def result_to_tsv_row(r: BenchmarkResult) -> str:
     return "\t".join([
         r.provider_name,
         r.file_name,
+        f"{rp.word_error_rate:.1f}",
         f"{rp.character_error_rate:.1f}",
         f"{rp.match_percentage:.1f}",
         str(rp.expected_chars),
@@ -198,6 +201,7 @@ def result_to_tsv_row(r: BenchmarkResult) -> str:
         str(rp.deleted_chars),
         str(rp.expected_words),
         str(rp.got_words),
+        str(rp.word_levenshtein),
         str(rp.report_file.name),
         "",
     ])
@@ -231,9 +235,7 @@ async def main() -> None:
     logger.info("Benchmark starting: %d provider(s), %d file(s).", len(specs), len(pairs))
 
     # Run all providers in parallel
-    nested: list[list[BenchmarkResult]] = await asyncio.gather(
-        *(run_provider(spec, pairs, ts) for spec in specs),
-    )
+    nested: list[list[BenchmarkResult]] = await asyncio.gather( *(run_provider(spec, pairs, ts) for spec in specs),)
     all_results: List[BenchmarkResult] = [r for provider_results in nested for r in provider_results]
 
     # Write TSV
@@ -241,18 +243,18 @@ async def main() -> None:
     logger.info("Benchmark complete. TSV report: %s", tsv_path)
 
     # Print summary to stdout
-    print(f"\n{'=' * 70}")
+    print(f"\n{'=' * 76}")
     print(f"  BENCHMARK RESULTS — {ts}")
-    print(f"{'=' * 70}")
-    print(f"{'Provider':<16} {'File':<14} {'CER%':>6} {'Match%':>7} {'Exp':>5} {'Got':>5}")
-    print(f"{'-' * 70}")
+    print(f"{'=' * 76}")
+    print(f"{'Provider':<16} {'File':<14} {'WER%':>6} {'CER%':>6} {'Match%':>7} {'Exp':>5} {'Got':>5}")
+    print(f"{'-' * 76}")
     for r in sorted(all_results, key=lambda x: (x.provider_name, x.file_name)):
         if r.report:
             rp = r.report
-            print(f"{r.provider_name:<16} {r.file_name:<14} {rp.character_error_rate:>5.1f}% {rp.match_percentage:>6.1f}% {rp.expected_chars:>5} {rp.got_chars:>5}")
+            print(f"{r.provider_name:<16} {r.file_name:<14} {rp.word_error_rate:>5.1f}% {rp.character_error_rate:>5.1f}% {rp.match_percentage:>6.1f}% {rp.expected_chars:>5} {rp.got_chars:>5}")
         else:
             print(f"{r.provider_name:<16} {r.file_name:<14} {'FAILED':>6}  {r.error or ''}")
-    print(f"{'=' * 70}")
+    print(f"{'=' * 76}")
     print(f"TSV: {tsv_path}")
 
 
