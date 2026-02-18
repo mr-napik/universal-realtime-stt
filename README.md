@@ -28,7 +28,7 @@ pip install -r requirements.txt
 After creating the venv:
 
 1. Right-click on project → Open Module Settings (Option + Down)
-2. Platform Settings → Add SDK → New SDK
+2. Platform Settings → SDKs → Add SDK (+) → Add Python SDK from disk ...
 3. Select existing SDK, type Python
 4. Point to `<project>/.venv/bin/python`
 5. Restart IDEA — the terminal should automatically activate `.venv`

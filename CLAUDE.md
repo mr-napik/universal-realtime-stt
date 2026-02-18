@@ -23,6 +23,9 @@ pytest tests/test_stt.py::TestStt::test_google -v
 pytest tests/test_stt.py::TestStt::test_deepgram -v
 pytest tests/test_stt.py::TestStt::test_speechmatics -v
 pytest tests/test_stt.py::TestStt::test_cartesia -v
+
+# Run benchmark (all providers in parallel, TSV report)
+python benchmark.py
 ```
 
 ## Environment Variables
@@ -36,19 +39,23 @@ Provider API keys in `.env`:
 
 ## Architecture
 
-The system uses async/await throughout with queue-based communication between components.
+The system uses async/await throughout with queue-based communication between components. Code is split into two packages:
 
-**Provider abstraction** (`lib/stt_provider.py`): Defines `RealtimeSttProvider` protocol — an async context manager that accepts audio bytes and yields `TranscriptEvent` objects. New providers implement this protocol.
+### `lib/` — Core STT library
 
-**Provider implementations** (`lib/stt_provider_*.py`): Each provider (ElevenLabs, Google, Deepgram, Speechmatics, Cartesia) has its own module implementing the protocol with provider-specific WebSocket handling and configuration dataclass.
+**Provider abstraction** (`lib/stt_provider.py`): Defines `RealtimeSttProvider` protocol — an async context manager that accepts audio bytes and yields `TranscriptEvent` objects. New providers implement this protocol via structural typing (no inheritance needed).
 
-**Session orchestration** (`lib/stt.py`): Runs two concurrent async tasks:
-- Audio streamer: sends PCM chunks from a queue to the provider
-- Transcript ingestor: collects committed transcripts into a result list
+**Provider implementations** (`lib/stt_provider_*.py`): Each provider (ElevenLabs, Google, Deepgram, Speechmatics, Cartesia) has its own module with a frozen config dataclass and a class implementing the protocol with provider-specific WebSocket handling.
 
-**WAV streaming** (`lib/helper_stream_wav.py`): Reads WAV files, yields PCM chunks with realistic timing pacing, and appends silence padding to ensure VAD commits the final utterance.
+**Session orchestration** (`lib/stt.py`): `stt_session_task()` runs two concurrent async tasks — a sender (audio queue → provider) and a receiver (provider events → transcript queue). Queues use `None` sentinels to signal completion.
 
-**Validation** (`lib/helper_diff.py`): Generates HTML diff reports in `out/` and calculates Levenshtein distance-based character error rate (CER).
+### `helpers/` — Test and benchmark support
+
+**Transcribe + diff pipeline** (`helpers/transcribe.py`): `transcribe_and_diff()` ties everything together — streams audio, collects transcripts, compares against ground truth, writes HTML diff report. This is the main entry point used by tests and benchmarks.
+
+**WAV streaming** (`helpers/stream_wav.py`): Reads WAV files, yields PCM chunks with realistic timing pacing, and appends silence padding to ensure VAD commits the final utterance.
+
+**Validation** (`helpers/diff.py`): Generates HTML diff reports and calculates Levenshtein distance-based character error rate (CER). Text is normalized (lowercase, punctuation removed) before comparison.
 
 **Test assets** (`assets/`): WAV/TXT file pairs where the TXT contains the expected transcript. Audio must be PCM 16kHz, mono, 16-bit. Convert with:
 ```bash
@@ -59,6 +66,7 @@ ffmpeg -i input.mp3 -ac 1 -ar 16000 -c:a pcm_s16le output.wav
 
 - **HTML diffs** in `out/` — visual comparison of expected vs actual transcripts
 - **Logs** in `log/` — DEBUG for project code (`lib.*`), INFO for third-party libraries
+- **TSV reports** in `out/` — benchmark results with per-provider, per-file CER metrics
 - Tests assert transcript length is within 14% of expected (CER-based tolerance)
 
 ## Configuration
@@ -72,7 +80,7 @@ ffmpeg -i input.mp3 -ac 1 -ar 16000 -c:a pcm_s16le output.wav
 
 - **Avoid provider SDKs** — providers are accessed directly via WebSocket (except Google which requires its SDK). This keeps dependencies light at the cost of more work if APIs change.
 - **Config architecture** — universal STT params live in `config.py` (language, format, VAD). Provider-specific settings (model, URL, param name translations) live in each provider's frozen dataclass. API keys are only injected at instantiation time.
-- **Queue-based IPC** — audio and transcript queues decouple streaming from processing. The test creates `audio_queue` (maxsize=40) and `transcript_queue` (maxsize=200).
+- **Queue-based IPC** — audio and transcript queues decouple streaming from processing. The test creates `audio_queue` (maxsize=40) and `transcript_queue` (maxsize=200). `None` sentinels signal end-of-stream.
 
 ## Adding a New Provider
 
@@ -82,4 +90,5 @@ ffmpeg -i input.mp3 -ac 1 -ar 16000 -c:a pcm_s16le output.wav
    - The protocol requires: `async __aenter__`/`__aexit__`, `send_audio(bytes)`, `end_audio()`, `events() -> AsyncIterator[TranscriptEvent]`
 2. Follow existing providers — they all use WebSocket with an internal `asyncio.Queue` for events
 3. Add a test method in `tests/test_stt.py` following the pattern of existing tests (instantiate config, call `self._runner()`)
-4. Add the API key env var to `.env`
+4. Add a benchmark entry in `benchmark.py` (`build_provider_specs()`)
+5. Add the API key env var to `.env`
