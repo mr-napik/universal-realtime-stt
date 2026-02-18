@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import Optional
 
@@ -79,40 +79,65 @@ def _escape_html(s: Optional[str]) -> str:
 
 @dataclass(frozen=True)
 class DiffReport:
-    report_file: Path
+    """Diff report comparing expected (ground truth) text against STT output.
+
+    Only ``text_expected`` and ``text_got`` are provided at construction time.
+    All metrics are derived automatically in ``__post_init__``.
+    """
     text_expected: str
     text_got: str
 
-    char_levenshtein: int
-    # Length stats (on normalized text)
-    chars_expected: int
-    words_expected: int
-    chars_got: int
-    words_got: int
-    # Diff breakdown
-    chars_matched: int
-    chars_inserted: int
-    chars_deleted: int
-    # Word-level error
-    word_levenshtein: int
+    # --- computed in __post_init__ (init=False) ---
+    char_levenshtein: int = field(init=False, repr=False)
+    chars_expected: int = field(init=False, repr=False)
+    words_expected: int = field(init=False, repr=False)
+    chars_got: int = field(init=False, repr=False)
+    words_got: int = field(init=False, repr=False)
+    chars_matched: int = field(init=False, repr=False)
+    chars_inserted: int = field(init=False, repr=False)
+    chars_deleted: int = field(init=False, repr=False)
+    word_levenshtein: int = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        expected_norm = normalize_text_for_diff(self.text_expected)
+        got_norm = normalize_text_for_diff(self.text_got)
+
+        dmp = diff_match_patch()
+        diffs = dmp.diff_main(expected_norm, got_norm)
+        dmp.diff_cleanupSemantic(diffs)
+
+        expected_words = expected_norm.split()
+        got_words = got_norm.split()
+
+        # object.__setattr__ is the standard pattern for frozen dataclass __post_init__
+        _set = object.__setattr__
+        _set(self, 'char_levenshtein', dmp.diff_levenshtein(diffs))
+        _set(self, 'chars_expected', len(expected_norm))
+        _set(self, 'words_expected', len(expected_words))
+        _set(self, 'chars_got', len(got_norm))
+        _set(self, 'words_got', len(got_words))
+        _set(self, 'chars_matched', sum(len(t) for op, t in diffs if op == 0))
+        _set(self, 'chars_inserted', sum(len(t) for op, t in diffs if op == 1))
+        _set(self, 'chars_deleted', sum(len(t) for op, t in diffs if op == -1))
+        _set(self, 'word_levenshtein', _word_levenshtein(expected_words, got_words))
 
     @property
     def character_error_rate(self) -> float:
-        """Returns character error rate in percent (based on levenshtein distance)."""
+        """Character error rate in percent (based on char-level levenshtein distance)."""
         if self.chars_expected == 0:
             return 0.0
         return round(float(self.char_levenshtein) / self.chars_expected * 100, 1)
 
     @property
     def word_error_rate(self) -> float:
-        """Returns word error rate in percent (based on word-level levenshtein distance)."""
+        """Word error rate in percent (based on word-level levenshtein distance)."""
         if self.words_expected == 0:
             return 0.0
         return round(float(self.word_levenshtein) / self.words_expected * 100, 1)
 
     @property
     def match_percentage(self) -> float:
-        """Returns percentage of expected characters that matched."""
+        """Percentage of expected characters that matched."""
         if self.chars_expected == 0:
             return 100.0
         return round(float(self.chars_matched) / self.chars_expected * 100, 1)
@@ -120,13 +145,13 @@ class DiffReport:
     def to_metrics_dict(self) -> dict[str, str]:
         """Export all numeric fields and computed properties as an ordered dict of formatted strings.
 
-        Skips str/Path fields (raw texts, report path). Includes @property computed metrics.
+        Skips str fields (raw texts). Includes @property computed metrics.
         Column order follows declaration order — add new fields/properties and they appear automatically.
         """
         d: dict[str, str] = {}
         for f in fields(self):
             val = getattr(self, f.name)
-            if isinstance(val, (str, Path)):
+            if isinstance(val, str):
                 continue
             d[f.name] = str(val)
         for name, obj in type(self).__dict__.items():
@@ -135,68 +160,17 @@ class DiffReport:
                 d[name] = f"{val:.1f}" if isinstance(val, float) else str(val)
         return d
 
+    def to_html(self, *, title: str, detail: str) -> str:
+        """Render the diff report as a self-contained HTML document."""
+        # Recompute diff HTML (cheap for typical transcript lengths)
+        expected_norm = normalize_text_for_diff(self.text_expected)
+        got_norm = normalize_text_for_diff(self.text_got)
+        dmp = diff_match_patch()
+        diffs = dmp.diff_main(expected_norm, got_norm)
+        dmp.diff_cleanupSemantic(diffs)
+        diff_html = dmp.diff_prettyHtml(diffs)
 
-def write_diff_report(
-        *,
-        expected: str,
-        got: str,
-        out_path: Path,
-        title: str,
-        detail: str,
-) -> DiffReport:
-    """
-    Create a human-readable HTML diff using diff-match-patch.
-
-    Output contains:
-      - expected text
-      - got text
-      - colored diff (insertions/deletions)
-
-    Returns DiffReport object with the written path.
-    """
-    out_path = out_path.resolve()
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-
-    # Normalize texts for comparison
-    expected_norm = normalize_text_for_diff(expected)
-    got_norm = normalize_text_for_diff(got)
-
-    dmp = diff_match_patch()
-    diffs = dmp.diff_main(expected_norm, got_norm)
-    dmp.diff_cleanupSemantic(diffs)
-    levenshtein = dmp.diff_levenshtein(diffs)
-
-    diff_html = dmp.diff_prettyHtml(diffs)
-
-    # Calculate diff breakdown: op is -1=delete, 0=equal, 1=insert
-    matched_chars = sum(len(text) for op, text in diffs if op == 0)
-    inserted_chars = sum(len(text) for op, text in diffs if op == 1)
-    deleted_chars = sum(len(text) for op, text in diffs if op == -1)
-
-    # Word-level error rate (industry-standard WER)
-    expected_words = expected_norm.split()
-    got_words = got_norm.split()
-    word_lev = _word_levenshtein(expected_words, got_words)
-
-    # Report object with all stats
-    report = DiffReport(
-        report_file=out_path,
-        text_expected=expected,
-        text_got=got,
-        char_levenshtein=levenshtein,
-        chars_expected=len(expected_norm),
-        words_expected=len(expected_words),
-        chars_got=len(got_norm),
-        words_got=len(got_words),
-        chars_matched=matched_chars,
-        chars_inserted=inserted_chars,
-        chars_deleted=deleted_chars,
-        word_levenshtein=word_lev,
-    )
-
-    # Minimal, self-contained HTML document. dmp.diff_prettyHtml returns <span> tags with inline styles.
-    # We wrap it with some structure + monospace + whitespace preserving.
-    html = f"""<!doctype html>
+        return f"""<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
@@ -278,44 +252,44 @@ def write_diff_report(
   </style>
 </head>
 <body>
-  <h1>{_escape_html(title)}: {report.word_error_rate}% WER / {report.character_error_rate}% CER</h1>
+  <h1>{_escape_html(title)}: {self.word_error_rate}% WER / {self.character_error_rate}% CER</h1>
 
   <div class='hint'>{_escape_html(detail)}</div>
 
   <div class="stats">
     <div class="stat">
       <div class="stat-label">Word Error Rate</div>
-      <div class="stat-value">{report.word_error_rate:.1f}%</div>
-      <div class="stat-detail">Word Levenshtein: {report.word_levenshtein}</div>
+      <div class="stat-value">{self.word_error_rate:.1f}%</div>
+      <div class="stat-detail">Word Levenshtein: {self.word_levenshtein}</div>
     </div>
     <div class="stat">
       <div class="stat-label">Character Error Rate</div>
-      <div class="stat-value">{report.character_error_rate:.1f}%</div>
-      <div class="stat-detail">Char Levenshtein: {report.char_levenshtein}</div>
+      <div class="stat-value">{self.character_error_rate:.1f}%</div>
+      <div class="stat-detail">Char Levenshtein: {self.char_levenshtein}</div>
     </div>
     <div class="stat">
       <div class="stat-label">Expected</div>
-      <div class="stat-value">{report.chars_expected} chars</div>
-      <div class="stat-detail">{report.words_expected} words</div>
+      <div class="stat-value">{self.chars_expected} chars</div>
+      <div class="stat-detail">{self.words_expected} words</div>
     </div>
     <div class="stat">
       <div class="stat-label">Got</div>
-      <div class="stat-value">{report.chars_got} chars</div>
-      <div class="stat-detail">{report.words_got} words</div>
+      <div class="stat-value">{self.chars_got} chars</div>
+      <div class="stat-detail">{self.words_got} words</div>
     </div>
     <div class="stat">
       <div class="stat-label">Matched</div>
-      <div class="stat-value">{report.match_percentage:.1f}%</div>
-      <div class="stat-detail">{report.chars_matched} chars</div>
+      <div class="stat-value">{self.match_percentage:.1f}%</div>
+      <div class="stat-detail">{self.chars_matched} chars</div>
     </div>
     <div class="stat">
       <div class="stat-label">Inserted</div>
-      <div class="stat-value">{report.chars_inserted} chars</div>
+      <div class="stat-value">{self.chars_inserted} chars</div>
       <div class="stat-detail">Extra in STT output</div>
     </div>
     <div class="stat">
       <div class="stat-label">Deleted</div>
-      <div class="stat-value">{report.chars_deleted} chars</div>
+      <div class="stat-value">{self.chars_deleted} chars</div>
       <div class="stat-detail">Missing from STT output</div>
     </div>
   </div>
@@ -327,17 +301,22 @@ def write_diff_report(
 
   <div class="panel">
     <h2>Expected (Ground Truth)</h2>
-    <pre>{_escape_html(expected)}</pre>
+    <pre>{_escape_html(self.text_expected)}</pre>
   </div>
 
   <div class="panel">
     <h2>Got (Result of STT)</h2>
-    <pre>{_escape_html(got)}</pre>
+    <pre>{_escape_html(self.text_got)}</pre>
   </div>
 
 
 </body>
 </html>
 """
-    out_path.write_text(html, encoding="utf-8")
-    return report
+
+    def write_html(self, out_path: Path, *, title: str, detail: str) -> Path:
+        """Write the HTML diff report to a file. Returns the resolved path."""
+        out_path = out_path.resolve()
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(self.to_html(title=title, detail=detail), encoding="utf-8")
+        return out_path

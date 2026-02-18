@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from helpers.diff import DiffReport, write_diff_report
+from helpers.diff import DiffReport
 from helpers.stream_wav import stream_wav_file, logger
 from helpers.transcript_ingest import transcript_ingest_task
 from lib.stt import stt_session_task
@@ -111,14 +111,12 @@ async def transcribe_and_diff(
     )
     logger.info("Final transcript raw: %r", transcript_raw)
 
-    # read ground truth
+    # read ground truth and compute diff
     expected_raw = txt_path.read_text(encoding="utf-8")
-
-    # compute and return diff
-    return write_diff_report(
-        expected=expected_raw,
-        got=transcript_raw,
-        out_path=out_path,
+    report = DiffReport(expected_raw, transcript_raw)
+    report.write_html(
+        out_path,
         title=f"{wav_path.name}: {provider_name}",
         detail=f"Provider: {provider_name}\nSound: {wav_path.name}\nExpected: {txt_path.name}\nReport: {out_path.name}",
     )
+    return report

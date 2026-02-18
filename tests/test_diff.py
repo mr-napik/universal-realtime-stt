@@ -12,7 +12,8 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from helpers.diff import DiffReport, write_diff_report
+from config import OUT_PATH
+from helpers.diff import DiffReport
 
 
 # Czech sample texts — expected is ground truth, got simulates STT output with typical errors.
@@ -38,22 +39,9 @@ class TestDiffReport(unittest.TestCase):
     def tearDown(self) -> None:
         self._tmpdir.cleanup()
 
-    def test_write_diff_report(self) -> None:
-        """HTML diff report is created with correct metrics."""
-        html_path = self.tmp / "test.diff.html"
-        report = write_diff_report(
-            expected=EXPECTED,
-            got=GOT,
-            out_path=html_path,
-            title="test sample",
-            detail="Unit test",
-        )
-
-        # File written
-        self.assertTrue(html_path.exists())
-        html = html_path.read_text(encoding="utf-8")
-        self.assertIn("WER", html)
-        self.assertIn("CER", html)
+    def test_metrics_from_construction(self) -> None:
+        """All metrics are computed automatically from just the two texts."""
+        report = DiffReport(EXPECTED, GOT)
 
         # Sanity: got is close to expected, so error rates should be low but nonzero
         self.assertGreater(report.word_error_rate, 0)
@@ -65,15 +53,28 @@ class TestDiffReport(unittest.TestCase):
         self.assertGreater(report.words_expected, 10)
         self.assertGreater(report.words_got, 10)
 
+    def test_write_html(self) -> None:
+        """write_html creates an HTML file with WER and CER stats."""
+        report = DiffReport(EXPECTED, GOT)
+        html_path = report.write_html(self.tmp / "test.diff.html", title="test sample", detail="Unit test")
+
+        self.assertTrue(html_path.exists())
+        html = html_path.read_text(encoding="utf-8")
+        self.assertIn("WER", html)
+        self.assertIn("CER", html)
+
+    def test_to_html_without_file(self) -> None:
+        """to_html returns HTML string without writing to disk."""
+        report = DiffReport(EXPECTED, GOT)
+        html = report.to_html(title="inline test", detail="no file")
+
+        self.assertIn("WER", html)
+        self.assertIn("CER", html)
+        self.assertIn("inline test", html)
+
     def test_to_metrics_dict(self) -> None:
-        """to_metrics_dict() includes all numeric fields and computed properties, excludes str/Path."""
-        report = write_diff_report(
-            expected=EXPECTED,
-            got=GOT,
-            out_path=self.tmp / "test.diff.html",
-            title="test",
-            detail="test",
-        )
+        """to_metrics_dict() includes all numeric fields and computed properties, excludes str."""
+        report = DiffReport(EXPECTED, GOT)
         metrics = report.to_metrics_dict()
 
         # Computed properties present
@@ -85,34 +86,31 @@ class TestDiffReport(unittest.TestCase):
         self.assertIn("chars_expected", metrics)
         self.assertIn("word_levenshtein", metrics)
 
-        # Raw text and path excluded
+        # Raw text excluded
         self.assertNotIn("text_expected", metrics)
         self.assertNotIn("text_got", metrics)
-        self.assertNotIn("report_file", metrics)
 
         # All values are strings (formatted for TSV)
         for k, v in metrics.items():
             self.assertIsInstance(v, str, f"metrics[{k!r}] should be str, got {type(v)}")
 
     def test_tsv_roundtrip(self) -> None:
-        """Benchmark write_tsv produces valid TSV with auto-discovered columns."""
+        """Benchmark write_tsv produces valid TSV with auto-discovered columns.
+
+        Writes HTML diff reports and TSV to out/ for manual inspection.
+        """
         from benchmark import BenchmarkResult, write_tsv
 
         reports = []
         for i, (exp, got) in enumerate([(EXPECTED, GOT), (GOT, EXPECTED)]):
-            report = write_diff_report(
-                expected=exp,
-                got=got,
-                out_path=self.tmp / f"diff_{i}.html",
-                title=f"sample {i}",
-                detail="test",
-            )
-            reports.append(BenchmarkResult(f"Provider{i}", f"file{i}.wav", report, None))
+            report = DiffReport(exp, got)
+            html_path = report.write_html(OUT_PATH / f"test_diff_{i}.diff.html", title=f"sample {i}", detail="test")
+            reports.append(BenchmarkResult(f"Provider{i}", f"file{i}.wav", report, html_path, None))
 
         # Add a failed result
-        reports.append(BenchmarkResult("FailedProvider", "fail.wav", None, "connection timeout"))
+        reports.append(BenchmarkResult("FailedProvider", "fail.wav", None, None, "connection timeout"))
 
-        tsv_path = write_tsv(reports, "test")
+        tsv_path = write_tsv(reports, "test_diff")
         self.assertTrue(tsv_path.exists())
 
         lines = tsv_path.read_text(encoding="utf-8").rstrip("\n").split("\n")

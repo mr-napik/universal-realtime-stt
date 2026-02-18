@@ -70,6 +70,7 @@ class BenchmarkResult:
     provider_name: str
     file_name: str
     report: DiffReport | None  # None when the run failed
+    report_path: Path | None  # path to HTML diff report
     error: str | None  # error message if failed
 
 
@@ -132,23 +133,24 @@ async def run_provider(spec: ProviderSpec, pairs: list[AssetPair], ts: str) -> l
 
     for pair in pairs:
         logger.info("[%s] Processing %s ...", spec.name, pair.wav.name)
+        report_path = OUT_PATH / f"{ts}_{spec.name}_{pair.wav.stem}.diff.html"
         try:
             provider = spec.cls(spec.config)
             report = await transcribe_and_diff(
                 provider,
                 pair.wav,
                 pair.txt,
-                OUT_PATH / f"{ts}_{spec.name}_{pair.wav.stem}.diff.html",
+                report_path,
                 chunk_ms=CHUNK_MS,
                 sample_rate=AUDIO_SAMPLE_RATE,
                 realtime_factor=TEST_REALTIME_FACTOR,
                 silence_s=FINAL_SILENCE_S,
             )
             logger.info("[%s] %s — WER: %.1f%%, CER: %.1f%%", spec.name, pair.wav.name, report.word_error_rate, report.character_error_rate)
-            results.append(BenchmarkResult(spec.name, pair.wav.name, report, None))
+            results.append(BenchmarkResult(spec.name, pair.wav.name, report, report_path, None))
         except Exception as exc:
             logger.error("[%s] %s — FAILED: %s", spec.name, pair.wav.name, exc)
-            results.append(BenchmarkResult(spec.name, pair.wav.name, None, str(exc)))
+            results.append(BenchmarkResult(spec.name, pair.wav.name, None, None, str(exc)))
 
     return results
 
@@ -170,7 +172,7 @@ def write_tsv(results: list[BenchmarkResult], ts: str) -> Path:
     for r in results_sorted:
         if r.report:
             metrics = r.report.to_metrics_dict()
-            row = [r.provider_name, r.file_name] + [metrics[c] for c in metric_cols] + [r.report.report_file.name, ""]
+            row = [r.provider_name, r.file_name] + [metrics[c] for c in metric_cols] + [r.report_path.name if r.report_path else "", ""]
         else:
             row = [r.provider_name, r.file_name] + [""] * len(metric_cols) + ["", r.error or "unknown error"]
         rows.append("\t".join(row))

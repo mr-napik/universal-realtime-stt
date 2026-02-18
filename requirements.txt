@@ -17,3 +17,7 @@ google-cloud-speech>=2.36.0
 #
 # Speechmatics
 # We do not use their library, we directly stream to webscokcet.
+
+#
+# Just for unit tests
+# pytest
