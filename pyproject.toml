@@ -10,7 +10,7 @@ authors = [
   { name = "Tomáš Kubeš" }
 ]
 readme = "README.md"
-license = { text = "MIT" }
+license = { file = "LICENSE" }
 requires-python = ">=3.10"
 keywords = ["speech-to-text", "stt", "realtime", "websocket", "asr", "transcription"]
 classifiers = [
