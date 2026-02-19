@@ -19,7 +19,7 @@ from logging import getLogger
 from os import getenv
 from typing import Any, Awaitable, Callable, Optional, Type
 
-from helpers.diff import CustomMetricResult
+from helpers.diff_report import CustomMetricResult
 
 from dotenv import load_dotenv
 
@@ -118,7 +118,7 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
         Fails explicitly if GEMINI_API_KEY is not set or google-genai is not installed.
         """
         try:
-            from helpers.llm_understanding import LLMUnderstandingAnalyzer
+            from helpers.semantic_understanding import SemanticUnderstandingAnalyzer
         except ImportError as exc:
             self.fail(f"google-genai not installed — run: pip install google-genai\n{exc}")
         else:
@@ -126,6 +126,6 @@ class TestStt(unittest.IsolatedAsyncioTestCase):
             if not api_key:
                 self.fail("GEMINI_API_KEY not set — add it to .env to run this test")
             else:
-                analyzer = LLMUnderstandingAnalyzer(api_key)
+                analyzer = SemanticUnderstandingAnalyzer(api_key)
                 config = SpeechmaticsSttConfig(api_key=getenv("SPEECHMATICS_API_KEY"))
                 await self._runner(SpeechmaticsRealtimeProvider, config, custom_metric_fn=analyzer.compare)

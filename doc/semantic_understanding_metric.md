@@ -1,4 +1,4 @@
-# LLM Semantic Understanding Metric
+# Semantic Understanding Metric
 
 ## Overview
 
@@ -96,12 +96,12 @@ If `GEMINI_API_KEY` is set, `benchmark.py` builds an `LLMUnderstandingAnalyzer` 
 ### In `transcribe_and_diff()` (manual / test)
 
 ```python
-from helpers.llm_understanding import LLMUnderstandingAnalyzer
+from helpers.semantic_understanding import SemanticUnderstandingAnalyzer
 
-analyzer = LLMUnderstandingAnalyzer(api_key=os.getenv("GEMINI_API_KEY"))
+analyzer = SemanticUnderstandingAnalyzer(api_key=os.getenv("GEMINI_API_KEY"))
 report = await transcribe_and_diff(
-    provider, wav_path, txt_path, out_path,
-    custom_metric_fn=analyzer.compare,
+   provider, wav_path, txt_path, out_path,
+   custom_metric_fn=analyzer.compare,
 )
 print(f"Understanding score: {report.custom_metric.score:.1f}%")
 print(report.custom_metric.detail)

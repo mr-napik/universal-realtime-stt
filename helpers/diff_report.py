@@ -11,11 +11,29 @@ from diff_match_patch import diff_match_patch
 class CustomMetricResult:
     """Return type for any custom metric function supplied to DiffReport.
 
-    score:  numeric score 0–100
-    detail: human-readable explanation shown in the HTML report
+    score:  numeric score 0–100 (lower = worse, like WER/CER)
+    detail: human-readable explanation for text contexts (logging, TSV)
+
+    Override to_html() in subclasses for a richer HTML representation.
     """
     score: float
     detail: str
+
+    def to_html(self) -> str:
+        """HTML fragment embedded in DiffReport. Override for custom rendering."""
+        return (
+            '<div class="panel">'
+            '<h2>Custom Metric</h2>'
+            '<div class="stats"><div class="stat">'
+            f'<div class="stat-label">Score</div>'
+            f'<div class="stat-value">{_escape_html(f"{self.score:.1f}%")}</div>'
+            '</div></div>'
+            '<details style="margin-top:12px">'
+            '<summary style="cursor:pointer;font-size:13px;color:#555">Detail</summary>'
+            f'<pre style="margin-top:8px">{_escape_html(self.detail)}</pre>'
+            '</details>'
+            '</div>'
+        )
 
 
 _PUNCTUATION_NORMALIZE = str.maketrans({
@@ -174,27 +192,6 @@ class DiffReport:
             d["custom_metric"] = f"{self.custom_metric.score:.1f}"
         return d
 
-    def _custom_metric_html(self) -> str:
-        """Render the custom metric section, or empty string if not set."""
-        if self.custom_metric is None:
-            return ""
-        return (
-            f'<div class="panel">'
-            f'<h2>Semantic Understanding</h2>'
-            f'<div class="stats">'
-            f'<div class="stat">'
-            f'<div class="stat-label">Understanding Score</div>'
-            f'<div class="stat-value">{self.custom_metric.score:.1f}%</div>'
-            f'<div class="stat-detail">LLM fact preservation</div>'
-            f'</div>'
-            f'</div>'
-            f'<details style="margin-top:12px">'
-            f'<summary style="cursor:pointer;font-size:13px;color:#555">Fact list</summary>'
-            f'<pre style="margin-top:8px">{_escape_html(self.custom_metric.detail)}</pre>'
-            f'</details>'
-            f'</div>'
-        )
-
     def to_html(self, *, title: str, detail: str) -> str:
         """Render the diff report as a self-contained HTML document."""
         # Recompute diff HTML (cheap for typical transcript lengths)
@@ -329,7 +326,7 @@ class DiffReport:
     </div>
   </div>
 
-  {self._custom_metric_html()}
+  {self.custom_metric.to_html() if self.custom_metric is not None else ""}
 
   <div class="panel">
     <h2>Diff (regardless of punctuation, spaces and capitalization; red = deletions, green = insertions)</h2>

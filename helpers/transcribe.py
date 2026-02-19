@@ -4,7 +4,7 @@ import asyncio
 from pathlib import Path
 from typing import Awaitable, Callable, Optional
 
-from helpers.diff import CustomMetricResult, DiffReport
+from helpers.diff_report import CustomMetricResult, DiffReport
 from helpers.stream_wav import stream_wav_file, logger
 from helpers.transcript_ingest import transcript_ingest_task
 from lib.stt import stt_session_task
@@ -99,7 +99,7 @@ async def transcribe_and_diff(
         silence_s: Silence padding (seconds) added before and after audio for VAD.
         custom_metric_fn: Optional async callable (expected, got) -> CustomMetricResult.
             When supplied, the result is embedded in the DiffReport and shown in the
-            HTML report and TSV export. See helpers/llm_understanding.py for an example.
+            HTML report and TSV export. See helpers/semantic_understanding.py for an example.
 
     Returns:
         DiffReport with accuracy metrics and paths.

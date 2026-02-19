@@ -17,7 +17,7 @@ from tempfile import TemporaryDirectory
 from dotenv import load_dotenv
 
 from config import OUT_PATH
-from helpers.diff import DiffReport
+from helpers.diff_report import DiffReport
 
 
 # Czech sample texts — expected is ground truth, got simulates STT output with typical errors.
@@ -137,7 +137,7 @@ class TestDiffReport(unittest.TestCase):
         self.assertIn("character_error_rate", header)
 
     def test_llm_semantic_compare(self) -> None:
-        """Integration test for LLMUnderstandingAnalyzer.
+        """Integration test for SemanticUnderstandingAnalyzer.
 
         Requires:
             - google-genai installed  (pip install google-genai)
@@ -150,7 +150,7 @@ class TestDiffReport(unittest.TestCase):
             pytest tests/test_diff.py::TestLLMUnderstanding -v
         """
         try:
-            from helpers.llm_understanding import LLMUnderstandingAnalyzer
+            from helpers.semantic_understanding import SemanticUnderstandingAnalyzer
         except ImportError as exc:
             self.fail(f"google-genai not installed — run: pip install google-genai\n{exc}")
 
@@ -159,7 +159,7 @@ class TestDiffReport(unittest.TestCase):
         if not api_key:
             self.fail("GEMINI_API_KEY not set — add it to .env to run this test")
 
-        result = asyncio.run(LLMUnderstandingAnalyzer(api_key).compare(EXPECTED, GOT))
+        result = asyncio.run(SemanticUnderstandingAnalyzer(api_key).compare(EXPECTED, GOT))
 
         self.assertIsInstance(result.score, float)
         self.assertGreaterEqual(result.score, 0.0)
@@ -167,5 +167,5 @@ class TestDiffReport(unittest.TestCase):
         self.assertIsInstance(result.detail, str)
         self.assertGreater(len(result.detail), 0)
 
-        # GOT differs from EXPECTED only by two minor omissions, so most facts are preserved
-        self.assertGreater(result.score, 50.0, "Expected high understanding score for near-identical texts")
+        # GOT differs from EXPECTED only by two minor omissions — SER should be low
+        self.assertLess(result.score, 50.0, "Expected low Semantic Error Rate for near-identical texts")

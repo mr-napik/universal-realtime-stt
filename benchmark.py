@@ -46,9 +46,9 @@ from typing import Any, Type, List
 from dotenv import load_dotenv
 
 from config import AUDIO_SAMPLE_RATE, CHUNK_MS, TEST_REALTIME_FACTOR, FINAL_SILENCE_S, OUT_PATH, ASSETS_DIR
-from helpers.diff import DiffReport
+from helpers.diff_report import DiffReport
 from helpers.load_assets import get_test_files, AssetPair
-from helpers.llm_understanding import LLMUnderstandingAnalyzer
+from helpers.semantic_understanding import SemanticUnderstandingAnalyzer
 from helpers.transcribe import transcribe_and_diff
 from lib.stt_provider_cartesia import CartesiaInkProvider, CartesiaSttConfig
 from lib.stt_provider_deepgram import DeepgramRealtimeProvider, DeepgramSttConfig
@@ -203,17 +203,17 @@ async def main() -> None:
 
     gemini_key = getenv("GEMINI_API_KEY")
     if gemini_key:
-        analyzer = LLMUnderstandingAnalyzer(api_key=gemini_key)
-        custom_metric_fn = analyzer.compare
+        analyzer = SemanticUnderstandingAnalyzer(api_key=gemini_key)
+        semantic_understanding_fn = analyzer.compare
         logger.info("Semantic understanding metric enabled (Gemini).")
     else:
-        custom_metric_fn = None
+        semantic_understanding_fn = None
         logger.warning("GEMINI_API_KEY not set — semantic understanding metric disabled.")
 
     logger.info("Benchmark starting: %d provider(s), %d file(s).", len(specs), len(pairs))
 
     # Run all providers in parallel
-    nested: list[list[BenchmarkResult]] = await asyncio.gather( *(run_provider(spec, pairs, ts, custom_metric_fn=custom_metric_fn) for spec in specs),)
+    nested: list[list[BenchmarkResult]] = await asyncio.gather( *(run_provider(spec, pairs, ts, custom_metric_fn=semantic_understanding_fn) for spec in specs),)
     all_results: List[BenchmarkResult] = [r for provider_results in nested for r in provider_results]
 
     # Write TSV
