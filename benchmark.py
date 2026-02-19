@@ -228,18 +228,21 @@ async def main() -> None:
     logger.info("Benchmark complete. TSV report: %s", tsv_path)
 
     # Print summary to stdout
-    print(f"\n{'=' * 76}")
-    print(f"  BENCHMARK RESULTS — {ts}")
-    print(f"{'=' * 76}")
-    print(f"{'Provider':<16} {'File':<14} {'WER%':>6} {'CER%':>6} {'Match%':>7} {'Exp':>5} {'Got':>5}")
-    print(f"{'-' * 76}")
+    width = 72
+
+    print(f"\n{'=' * width}")
+    print(f"BENCHMARK RESULTS — {ts}")
+    print(f"{'=' * width}")
+    print(f"{'Provider':<16} {'File':<14} {'WER%':>6} {'CER%':>6} {'SER%':>6} {'Match%':>7} {'Exp':>5} {'Got':>5}")
+    print(f"{'-' * width}")
     for r in sorted(all_results, key=lambda x: (x.provider_name, x.file_name)):
         if r.report:
             rp = r.report
-            print(f"{r.provider_name:<16} {r.file_name:<14} {rp.word_error_rate:>5.1f}% {rp.character_error_rate:>5.1f}% {rp.match_percentage:>6.1f}% {rp.chars_expected:>5} {rp.chars_got:>5}")
+            ser = f"{rp.custom_metric.score:>5.1f}%" if rp.custom_metric is not None else f"{'—':>6}"
+            print(f"{r.provider_name:<16} {r.file_name:<14} {rp.word_error_rate:>5.1f}% {rp.character_error_rate:>5.1f}% {ser} {rp.match_percentage:>6.1f}% {rp.chars_expected:>5} {rp.chars_got:>5}")
         else:
             print(f"{r.provider_name:<16} {r.file_name:<14} {'FAILED':>6}  {r.error or ''}")
-    print(f"{'=' * 76}")
+    print(f"{'=' * width}")
     print(f"TSV: {tsv_path}")
 
 
