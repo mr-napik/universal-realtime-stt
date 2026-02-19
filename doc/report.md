@@ -24,102 +24,34 @@ Only assets belonging to: Příběhy 20. století (Post Bellum). Were selected.
 
 | File                               | Person                            | Event                                         | Quality | Link                                                                                                                                       |
 |------------------------------------|-----------------------------------|-----------------------------------------------|---------|--------------------------------------------------------------------------------------------------------------------------------------------|
+| 2022-10_Nesm%C4%9Bli...            | Zlata Bednářová                   | Nesměli bychom se vzít                        | Poor    | [link](https://www.pametnaroda.cz/system/files/2022-10/Nesm%C4%9Bli%20bychom%20se%20vz%C3%ADt.mp3)                                         |
+| 2022-12_klip_0                     | RNDr., CSc. Adolf Absolon         | Nový domov v pohraničí                        | Good    | [klip_0.mp3](https://www.pametnaroda.cz/system/files/2022-12/klip_0.mp3)                                                                   |
+| 2023-02_Adam3                      | Josef Adam                        | Sovětští vojáci se ve stodole prali o chleba  | Good    | [Adam3.mp3](https://www.pametnaroda.cz/system/files/2023-02/Adam3.mp3)                                                                     |
+| witness_16_540-audio               | plukovník Josef Balejka           | Jak ho Poláci málem pověsili                  | OK      | [540-audio.mp3](https://www.pametnaroda.cz/system/files/witness/16/540-audio.mp3)                                                          |
 | witness_44_87-audio                              | kapitán Adolf Vodička             | Motivace k odchodu                            | OK      | [87-audio.mp3](https://www.pametnaroda.cz/system/files/witness/44/87-audio.mp3)                                                            |
 | witness_1719_14584-audio                              | Staša Fleischmannová              | Fučík v ateliéru                              | Poor    | [14584-audio.mp3](https://www.pametnaroda.cz/system/files/witness/1719/14584-audio.mp3)                                                               |
 | witness_1719_14584-audio-leveled                      | dtto                              | dtto                                          | OK      | louder by 30dB                                                                                                                             |
-| 1994_12938-audio                   | Benjamin Abeles                   | U pozemního personálu v Royal Air Force       | poor    | [12938-audio.mp3](https://www.pametnaroda.cz/system/files/witness/1994/12938-audio.mp3)                                                    |
-| 1994_12938-audio-leveled                   | dtto                              | dtto                                          | OK      | louder by 22db                                                                                                                             |
-| 2022-12_klip_0                     | RNDr., CSc. Adolf Absolon         | Nový domov v pohraničí                        | Good    | [klip_0.mp3](https://www.pametnaroda.cz/system/files/2022-12/klip_0.mp3)                                                                   |
-| 2023-02_Adam3                      | Josef Adam                        | Sovětští vojáci se ve stodole prali o chleba  | Good    | [Adam3.mp3](https://www.pametnaroda.cz/system/files/2023-02/Adam3.mp3)                                                                     |
+| witness_1994_12938-audio                   | Benjamin Abeles                   | U pozemního personálu v Royal Air Force       | poor    | [12938-audio.mp3](https://www.pametnaroda.cz/system/files/witness/1994/12938-audio.mp3)                                                    |
+| witness_1994_12938-audio-leveled                   | dtto                              | dtto                                          | OK      | louder by 22db                                                                                                                             |
+| witness_2134_8442-audio.mp3 | František Adamec | Zastřelili faráře z Olomouce a tvrdili, že to bylo při útěku z vězení | poor | [witness_2134_8442-audio.mp3](https://www.pametnaroda.cz/system/files/witness/2134/8442-audio.mp3) |
 | witness_2148_7922-audio            | Hilda Arnsteinová, roz. Sommerová | Život v Terezíně                              | poor    | [7922-audio.mp3](https://www.pametnaroda.cz/system/files/witness/2148/7922-audio.mp3)                                                      |
-| 2022-10_Nesm%C4%9Bli...            | Zlata Bednářová                   | Nesměli bychom se vzít                        | Poor    | [link](https://www.pametnaroda.cz/system/files/2022-10/Nesm%C4%9Bli%20bychom%20se%20vz%C3%ADt.mp3)                                         |
-| witness_16_540-audio               | plukovník Josef Balejka           | Jak ho Poláci málem pověsili                  | OK      | [540-audio.mp3](https://www.pametnaroda.cz/system/files/witness/16/540-audio.mp3)                                                          |
 | witness_4364_12898-video           | Zdeněk Adamec                     | Protest proti maďarským událostem v roce 1956 | xx      | [12898-video.mov](https://www.pametnaroda.cz/system/files/witness/4364/12898-video.mov)                                                    |
-| witness_by-date_2020-11_Kv_...     | Mgr. Květa Běhalová               | Výslech kvůli Černé knize vydané v roce 1968  | xx      | [link](https://www.pametnaroda.cz/system/files/witness/by-date/2020-11/Kv%C5%AFli%20%C4%8Cern%C3%A9%20knize%20vysl%C3%BDch%C3%A1ni%20.mp3) |
 | witness_by-date_2020-08_nejhor_... | Iva Bejčková                      | Kapající voda na samotce                      | xx      | [link](https://www.pametnaroda.cz/system/files/witness/by-date/2020-08/nejhor%C5%A1%C3%AD%20byla%20kapaj%C3%ADc%C3%AD%20voda.mp3)          |
+| witness_by-date_2020-11_Kv_...     | Mgr. Květa Běhalová               | Výslech kvůli Černé knize vydané v roce 1968  | xx      | [link](https://www.pametnaroda.cz/system/files/witness/by-date/2020-11/Kv%C5%AFli%20%C4%8Cern%C3%A9%20knize%20vysl%C3%BDch%C3%A1ni%20.mp3) |
+
 
 ## Asset Preprocessing
 
 ```
 Last login: Thu Feb 19 09:57:30 on ttys003
 
+# conversion to vaw
 for f in *.mp3; do
   afconvert "$f" "${f%.mp3}.wav" -f WAVE -d LEI16@16000 -c 1 -v
 done
-Input file: 2022-10_Nesm%C4%9Bli%20bychom%20se%20vz%C3%ADt.mp3, 2825168 frames
-Formats:
-  Input file     2 ch,  44100 Hz, .mp3 (0x00000000) 0 bits/channel, 0 bytes/packet, 1152 frames/packet, 0 bytes/frame
-  Input client   1 ch,  16000 Hz, Int16
-<AudioConverterRef 0x11161af [0x600000a90a80]>
-  Output file    1 ch,  16000 Hz, Int16
-Optimizing 2022-10_Nesm%C4%9Bli%20bychom%20se%20vz%C3%ADt.wav... done
-Output file: 2022-10_Nesm%C4%9Bli%20bychom%20se%20vz%C3%ADt.wav, 1025004 frames
-Input file: 2022-12_klip_0.mp3, 3529152 frames
-Formats:
-  Input file     2 ch,  44100 Hz, .mp3 (0x00000000) 0 bits/channel, 0 bytes/packet, 1152 frames/packet, 0 bytes/frame
-  Input client   1 ch,  16000 Hz, Int16
-<AudioConverterRef 0x11171af [0x60000232c990]>
-  Output file    1 ch,  16000 Hz, Int16
-Optimizing 2022-12_klip_0.wav... done
-Output file: 2022-12_klip_0.wav, 1280418 frames
-Input file: 2023-02_Adam3.mp3, 5102208 frames
-Formats:
-  Input file     2 ch,  48000 Hz, .mp3 (0x00000000) 0 bits/channel, 0 bytes/packet, 1152 frames/packet, 0 bytes/frame
-  Input client   1 ch,  16000 Hz, Int16
-<AudioConverterRef 0x11181af [0x600001f24030]>
-  Output file    1 ch,  16000 Hz, Int16
-Optimizing 2023-02_Adam3.wav... done
-Output file: 2023-02_Adam3.wav, 1700736 frames
-Input file: witness_16_540-audio.mp3, 12114432 frames
-Formats:
-  Input file     2 ch,  44100 Hz, .mp3 (0x00000000) 0 bits/channel, 0 bytes/packet, 1152 frames/packet, 0 bytes/frame
-  Input client   1 ch,  16000 Hz, Int16
-<AudioConverterRef 0x11191af [0x600002b2c780]>
-  Output file    1 ch,  16000 Hz, Int16
-Optimizing witness_16_540-audio.wav... done
-Output file: witness_16_540-audio.wav, 4395259 frames
-Input file: witness_1994_12938-audio.mp3, 3498624 frames
-Formats:
-  Input file     1 ch,  48000 Hz, .mp3 (0x00000000) 0 bits/channel, 0 bytes/packet, 1152 frames/packet, 0 bytes/frame
-  Input client   1 ch,  16000 Hz, Int16
-<AudioConverterRef 0x111a1af [0x600001b78780]>
-  Output file    1 ch,  16000 Hz, Int16
-Optimizing witness_1994_12938-audio.wav... done
-Output file: witness_1994_12938-audio.wav, 1166208 frames
-Input file: witness_2134_8442-audio.mp3, 1939456 frames
-Formats:
-  Input file     2 ch,  44100 Hz, .mp3 (0x00000000) 0 bits/channel, 0 bytes/packet, 1152 frames/packet, 0 bytes/frame
-  Input client   1 ch,  16000 Hz, Int16
-<AudioConverterRef 0x111c1af [0x6000017bdc80]>
-  Output file    1 ch,  16000 Hz, Int16
-Optimizing witness_2134_8442-audio.wav... done
-Output file: witness_2134_8442-audio.wav, 703658 frames
-Input file: witness_2148_7922-audio.mp3, 9009643 frames
-Formats:
-  Input file     2 ch,  44100 Hz, .mp3 (0x00000000) 0 bits/channel, 0 bytes/packet, 1152 frames/packet, 0 bytes/frame
-  Input client   1 ch,  16000 Hz, Int16
-<AudioConverterRef 0x111d1af [0x6000015bf420]>
-  Output file    1 ch,  16000 Hz, Int16
-Optimizing witness_2148_7922-audio.wav... done
-Output file: witness_2148_7922-audio.wav, 3268805 frames
-Input file: witness_by-date_2020-08_nejhor_C5_A1_C3_AD_20byla_20kapaj_C3_ADc_C3_AD_20voda.mp3, 3822481 frames
-Formats:
-  Input file     2 ch,  48000 Hz, .mp3 (0x00000000) 0 bits/channel, 0 bytes/packet, 1152 frames/packet, 0 bytes/frame
-  Input client   1 ch,  16000 Hz, Int16
-<AudioConverterRef 0x111f1af [0x6000035ac810]>
-  Output file    1 ch,  16000 Hz, Int16
-Optimizing witness_by-date_2020-08_nejhor_C5_A1_C3_AD_20byla_20kapaj_C3_ADc_C3_AD_20voda.wav... done
-Output file: witness_by-date_2020-08_nejhor_C5_A1_C3_AD_20byla_20kapaj_C3_ADc_C3_AD_20voda.wav, 1274160 frames
-Input file: witness_by-date_2020-11_Kv_C5_AFli_20_C4_8Cern_C3_A9_20knize_20vysl_C3_BDch_C3_A1ni_20.mp3, 4116619 frames
-Formats:
-  Input file     2 ch,  44100 Hz, .mp3 (0x00000000) 0 bits/channel, 0 bytes/packet, 1152 frames/packet, 0 bytes/frame
-  Input client   1 ch,  16000 Hz, Int16
-<AudioConverterRef 0x11201af [0x600000bc86c0]>
-  Output file    1 ch,  16000 Hz, Int16
-Optimizing witness_by-date_2020-11_Kv_C5_AFli_20_C4_8Cern_C3_A9_20knize_20vysl_C3_BDch_C3_A1ni_20.wav... done
-Output file: witness_by-date_2020-11_Kv_C5_AFli_20_C4_8Cern_C3_A9_20knize_20vysl_C3_BDch_C3_A1ni_20.wav, 1493558 frames
+...
 
-
+# volume level
 for f in *.wav; do
   echo "File: $f"
   ffmpeg -i "$f" -af volumedetect -f null - 2>&1 | egrep "mean_volume|max_volume"
@@ -174,24 +106,8 @@ File: witness_by-date_2020-11_Kv_C5_AFli_20_C4_8Cern_C3_A9_20knize_20vysl_C3_BDc
 [Parsed_volumedetect_0 @ 0x7fb06a309d00] mean_volume: -28.2 dB
 [Parsed_volumedetect_0 @ 0x7fb06a309d00] max_volume: -9.7 dB
 
-
+# Volume adjust
 ffmpeg -i witness_1994_12938-audio.wav -filter:a "volume=22dB,alimiter=limit=1.0" witness_1994_12938-audio-levelled.wav
-ffmpeg version 8.0 Copyright (c) 2000-2025 the FFmpeg developers
-[aist#0:0/pcm_s16le @ 0x7fdd92a0a580] Guessed Channel Layout: mono
-Input #0, wav, from 'witness_1994_12938-audio.wav':
-  Duration: 00:01:12.89, bitrate: 256 kb/s
-  Stream #0:0: Audio: pcm_s16le ([1][0][0][0] / 0x0001), 16000 Hz, mono, s16, 256 kb/s
-Stream mapping:
-  Stream #0:0 -> #0:0 (pcm_s16le (native) -> pcm_s16le (native))
-Press [q] to stop, [?] for help
-Output #0, wav, to 'witness_1994_12938-audio-levelled.wav':
-  Metadata:
-    ISFT            : Lavf62.3.100
-  Stream #0:0: Audio: pcm_s16le ([1][0][0][0] / 0x0001), 16000 Hz, mono, s16, 256 kb/s
-    Metadata:
-      encoder         : Lavc62.11.100 pcm_s16le
-[out#0/wav @ 0x7fdd92a0a7c0] video:0KiB audio:2278KiB subtitle:0KiB other streams:0KiB global headers:0KiB muxing overhead: 0.003344%
-size=    2278KiB time=00:01:12.88 bitrate= 256.0kbits/s speed=2.38e+03x elapsed=0:00:00.03
 ```
 
 ---
