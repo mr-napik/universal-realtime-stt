@@ -197,7 +197,7 @@ class SemanticUnderstandingAnalyzer:
     """
 
     def __init__(self, api_key: str) -> None:
-        self._llm = LLMBasicClient(api_key=api_key, model_id=_MODEL_ID, max_tokens=16000)
+        self._llm = LLMBasicClient(api_key=api_key, model_id=_MODEL_ID, max_tokens=16000, temperature=0.0)
 
     async def compare(self, text_expected: str, text_got: str) -> SemanticMetricResult:
         """
