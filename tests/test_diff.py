@@ -8,9 +8,13 @@ with sample text — no STT providers or audio files needed.
 """
 from __future__ import annotations
 
+import asyncio
 import unittest
+from os import getenv
 from pathlib import Path
 from tempfile import TemporaryDirectory
+
+from dotenv import load_dotenv
 
 from config import OUT_PATH
 from helpers.diff import DiffReport
@@ -131,3 +135,37 @@ class TestDiffReport(unittest.TestCase):
         # Metric columns auto-discovered from DiffReport
         self.assertIn("word_error_rate", header)
         self.assertIn("character_error_rate", header)
+
+    def test_llm_semantic_compare(self) -> None:
+        """Integration test for LLMUnderstandingAnalyzer.
+
+        Requires:
+            - google-genai installed  (pip install google-genai)
+            - GEMINI_API_KEY set in environment or .env
+
+        Both conditions are checked inside the test — if either is missing the test
+        *fails* explicitly (rather than being skipped) to make the requirement visible.
+        Other test classes are not affected.
+
+            pytest tests/test_diff.py::TestLLMUnderstanding -v
+        """
+        try:
+            from helpers.llm_understanding import LLMUnderstandingAnalyzer
+        except ImportError as exc:
+            self.fail(f"google-genai not installed — run: pip install google-genai\n{exc}")
+
+        load_dotenv()
+        api_key = getenv("GEMINI_API_KEY")
+        if not api_key:
+            self.fail("GEMINI_API_KEY not set — add it to .env to run this test")
+
+        result = asyncio.run(LLMUnderstandingAnalyzer(api_key).compare(EXPECTED, GOT))
+
+        self.assertIsInstance(result.score, float)
+        self.assertGreaterEqual(result.score, 0.0)
+        self.assertLessEqual(result.score, 100.0)
+        self.assertIsInstance(result.detail, str)
+        self.assertGreater(len(result.detail), 0)
+
+        # GOT differs from EXPECTED only by two minor omissions, so most facts are preserved
+        self.assertGreater(result.score, 50.0, "Expected high understanding score for near-identical texts")

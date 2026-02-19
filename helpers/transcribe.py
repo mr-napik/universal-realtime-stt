@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from typing import Awaitable, Callable, Optional
 
-from helpers.diff import DiffReport
+from helpers.diff import CustomMetricResult, DiffReport
 from helpers.stream_wav import stream_wav_file, logger
 from helpers.transcript_ingest import transcript_ingest_task
 from lib.stt import stt_session_task
@@ -78,6 +79,7 @@ async def transcribe_and_diff(
         sample_rate: int = 16_000,
         realtime_factor: float = 1.0,
         silence_s: float = 2.0,
+        custom_metric_fn: Optional[Callable[[str, str], Awaitable[CustomMetricResult]]] = None,
 ) -> DiffReport:
     """
     Transcribe a WAV file and compare against ground-truth text.
@@ -95,6 +97,9 @@ async def transcribe_and_diff(
         sample_rate: Expected sample rate in Hz.
         realtime_factor: Playback speed (1.0 = real-time, 0.0 = no delay).
         silence_s: Silence padding (seconds) added before and after audio for VAD.
+        custom_metric_fn: Optional async callable (expected, got) -> CustomMetricResult.
+            When supplied, the result is embedded in the DiffReport and shown in the
+            HTML report and TSV export. See helpers/llm_understanding.py for an example.
 
     Returns:
         DiffReport with accuracy metrics and paths.
@@ -113,7 +118,9 @@ async def transcribe_and_diff(
 
     # read ground truth and compute diff
     expected_raw = txt_path.read_text(encoding="utf-8")
-    report = DiffReport(expected_raw, transcript_raw)
+
+    custom_metric = await custom_metric_fn(expected_raw, transcript_raw) if custom_metric_fn else None
+    report = DiffReport(expected_raw, transcript_raw, custom_metric=custom_metric)
     report.write_html(
         out_path,
         title=f"{wav_path.name}: {provider_name}",

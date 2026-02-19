@@ -7,6 +7,17 @@ from typing import Optional
 from diff_match_patch import diff_match_patch
 
 
+@dataclass(frozen=True)
+class CustomMetricResult:
+    """Return type for any custom metric function supplied to DiffReport.
+
+    score:  numeric score 0–100
+    detail: human-readable explanation shown in the HTML report
+    """
+    score: float
+    detail: str
+
+
 _PUNCTUATION_NORMALIZE = str.maketrans({
     # Curly/smart double quotes → straight
     '\u201c': '"',  # "
@@ -86,6 +97,7 @@ class DiffReport:
     """
     text_expected: str
     text_got: str
+    custom_metric: CustomMetricResult | None = field(default=None)
 
     # --- computed in __post_init__ (init=False) ---
     char_levenshtein: int = field(init=False, repr=False)
@@ -151,14 +163,37 @@ class DiffReport:
         d: dict[str, str] = {}
         for f in fields(self):
             val = getattr(self, f.name)
-            if isinstance(val, str):
+            if not isinstance(val, (int, float)):
                 continue
             d[f.name] = str(val)
         for name, obj in type(self).__dict__.items():
             if isinstance(obj, property):
                 val = getattr(self, name)
                 d[name] = f"{val:.1f}" if isinstance(val, float) else str(val)
+        if self.custom_metric is not None:
+            d["custom_metric"] = f"{self.custom_metric.score:.1f}"
         return d
+
+    def _custom_metric_html(self) -> str:
+        """Render the custom metric section, or empty string if not set."""
+        if self.custom_metric is None:
+            return ""
+        return (
+            f'<div class="panel">'
+            f'<h2>Semantic Understanding</h2>'
+            f'<div class="stats">'
+            f'<div class="stat">'
+            f'<div class="stat-label">Understanding Score</div>'
+            f'<div class="stat-value">{self.custom_metric.score:.1f}%</div>'
+            f'<div class="stat-detail">LLM fact preservation</div>'
+            f'</div>'
+            f'</div>'
+            f'<details style="margin-top:12px">'
+            f'<summary style="cursor:pointer;font-size:13px;color:#555">Fact list</summary>'
+            f'<pre style="margin-top:8px">{_escape_html(self.custom_metric.detail)}</pre>'
+            f'</details>'
+            f'</div>'
+        )
 
     def to_html(self, *, title: str, detail: str) -> str:
         """Render the diff report as a self-contained HTML document."""
@@ -293,6 +328,8 @@ class DiffReport:
       <div class="stat-detail">Missing from STT output</div>
     </div>
   </div>
+
+  {self._custom_metric_html()}
 
   <div class="panel">
     <h2>Diff (regardless of punctuation, spaces and capitalization; red = deletions, green = insertions)</h2>

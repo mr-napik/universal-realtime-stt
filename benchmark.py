@@ -48,6 +48,7 @@ from dotenv import load_dotenv
 from config import AUDIO_SAMPLE_RATE, CHUNK_MS, TEST_REALTIME_FACTOR, FINAL_SILENCE_S, OUT_PATH, ASSETS_DIR
 from helpers.diff import DiffReport
 from helpers.load_assets import get_test_files, AssetPair
+from helpers.llm_understanding import LLMUnderstandingAnalyzer
 from helpers.transcribe import transcribe_and_diff
 from lib.stt_provider_cartesia import CartesiaInkProvider, CartesiaSttConfig
 from lib.stt_provider_deepgram import DeepgramRealtimeProvider, DeepgramSttConfig
@@ -127,7 +128,7 @@ def build_provider_specs() -> list[ProviderSpec]:
 # Per-provider runner (processes all files sequentially)
 # ---------------------------------------------------------------------------
 
-async def run_provider(spec: ProviderSpec, pairs: list[AssetPair], ts: str) -> list[BenchmarkResult]:
+async def run_provider(spec: ProviderSpec, pairs: list[AssetPair], ts: str, custom_metric_fn=None) -> list[BenchmarkResult]:
     """Run one provider against all asset files. Returns one result per file."""
     results: list[BenchmarkResult] = []
 
@@ -145,6 +146,7 @@ async def run_provider(spec: ProviderSpec, pairs: list[AssetPair], ts: str) -> l
                 sample_rate=AUDIO_SAMPLE_RATE,
                 realtime_factor=TEST_REALTIME_FACTOR,
                 silence_s=FINAL_SILENCE_S,
+                custom_metric_fn=custom_metric_fn,
             )
             logger.info("[%s] %s — WER: %.1f%%, CER: %.1f%%", spec.name, pair.wav.name, report.word_error_rate, report.character_error_rate)
             results.append(BenchmarkResult(spec.name, pair.wav.name, report, report_path, None))
@@ -199,10 +201,19 @@ async def main() -> None:
         logger.error("No WAV/TXT asset pairs found in %s.", ASSETS_DIR)
         sys.exit(1)
 
+    gemini_key = getenv("GEMINI_API_KEY")
+    if gemini_key:
+        analyzer = LLMUnderstandingAnalyzer(api_key=gemini_key)
+        custom_metric_fn = analyzer.compare
+        logger.info("Semantic understanding metric enabled (Gemini).")
+    else:
+        custom_metric_fn = None
+        logger.warning("GEMINI_API_KEY not set — semantic understanding metric disabled.")
+
     logger.info("Benchmark starting: %d provider(s), %d file(s).", len(specs), len(pairs))
 
     # Run all providers in parallel
-    nested: list[list[BenchmarkResult]] = await asyncio.gather( *(run_provider(spec, pairs, ts) for spec in specs),)
+    nested: list[list[BenchmarkResult]] = await asyncio.gather( *(run_provider(spec, pairs, ts, custom_metric_fn=custom_metric_fn) for spec in specs),)
     all_results: List[BenchmarkResult] = [r for provider_results in nested for r in provider_results]
 
     # Write TSV

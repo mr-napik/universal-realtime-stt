@@ -3,6 +3,12 @@ websockets>=16.0.0
 python-dotenv>=1.2.1
 diff-match-patch>=20241021
 
+# Just for unit tests
+# pytest
+
+# Just for running the LLM benchmark
+# google-genai>=1.64.0
+
 # Providers
 #
 # Cartesia
@@ -17,7 +23,3 @@ google-cloud-speech>=2.36.0
 #
 # Speechmatics
 # We do not use their library, we directly stream to webscokcet.
-
-#
-# Just for unit tests
-# pytest
