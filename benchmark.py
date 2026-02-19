@@ -204,7 +204,7 @@ async def main() -> None:
     gemini_key = getenv("GEMINI_API_KEY")
     if gemini_key:
         try:
-            from helpers.semantic_understanding import SemanticUnderstandingAnalyzer
+            from helpers.semantic_understanding import SemanticUnderstandingAnalyzer  # noqa: F821 — false positive, not used if import fails
             semantic_understanding_fn = SemanticUnderstandingAnalyzer(api_key=gemini_key).compare
             logger.info("Semantic understanding metric enabled (Gemini).")
         except ImportError:
@@ -220,7 +220,7 @@ async def main() -> None:
     logger.info("Benchmark starting: %d provider(s), %d file(s).", len(specs), len(pairs))
 
     # Run all providers in parallel
-    nested: list[list[BenchmarkResult]] = await asyncio.gather( *(run_provider(spec, pairs, ts, custom_metric_fn=semantic_understanding_fn) for spec in specs),)
+    nested: list[list[BenchmarkResult]] = await asyncio.gather( *(run_provider(spec, pairs, ts, custom_metric_fn=semantic_understanding_fn) for spec in specs),)  # type: ignore[assignment] — asyncio.gather returns tuple, but runtime values match
     all_results: List[BenchmarkResult] = [r for provider_results in nested for r in provider_results]
 
     # Write TSV
