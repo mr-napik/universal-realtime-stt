@@ -30,6 +30,7 @@ semantic facts from both and classify each fact.
 
 A fact is a simple statement: subject + predicate + object.
 Focus on: named entities, events, quotes, attributions, and statements of fact.
+Pick only information relevant for understanding the conversation. 
 Ignore punctuation, word-order differences, and morphological variation (Czech inflection).
 
 Classify each fact with a verdict:
