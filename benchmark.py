@@ -48,7 +48,6 @@ from dotenv import load_dotenv
 from config import AUDIO_SAMPLE_RATE, CHUNK_MS, TEST_REALTIME_FACTOR, FINAL_SILENCE_S, OUT_PATH, ASSETS_DIR
 from helpers.diff_report import DiffReport
 from helpers.load_assets import get_test_files, AssetPair
-from helpers.semantic_understanding import SemanticUnderstandingAnalyzer
 from helpers.transcribe import transcribe_and_diff
 from lib.stt_provider_cartesia import CartesiaInkProvider, CartesiaSttConfig
 from lib.stt_provider_deepgram import DeepgramRealtimeProvider, DeepgramSttConfig
@@ -201,13 +200,21 @@ async def main() -> None:
         logger.error("No WAV/TXT asset pairs found in %s.", ASSETS_DIR)
         sys.exit(1)
 
+    semantic_understanding_fn = None
     gemini_key = getenv("GEMINI_API_KEY")
     if gemini_key:
-        analyzer = SemanticUnderstandingAnalyzer(api_key=gemini_key)
-        semantic_understanding_fn = analyzer.compare
-        logger.info("Semantic understanding metric enabled (Gemini).")
+        try:
+            from helpers.semantic_understanding import SemanticUnderstandingAnalyzer
+            semantic_understanding_fn = SemanticUnderstandingAnalyzer(api_key=gemini_key).compare
+            logger.info("Semantic understanding metric enabled (Gemini).")
+        except ImportError:
+            logger.warning(
+                "GEMINI_API_KEY is set but google-genai is not installed — "
+                "semantic understanding metric disabled. "
+                "Install it with: pip install google-genai  "
+                "(or uncomment google-genai in requirements.txt and run: pip install -r requirements.txt)"
+            )
     else:
-        semantic_understanding_fn = None
         logger.warning("GEMINI_API_KEY not set — semantic understanding metric disabled.")
 
     logger.info("Benchmark starting: %d provider(s), %d file(s).", len(specs), len(pairs))
