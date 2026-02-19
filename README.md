@@ -1,6 +1,6 @@
 # Universal Realtime STT Library
 
-A provider-agnostic library for realtime speech-to-text. 
+A provider-agnostic library for realtime speech-to-text.
 
 **Supports:**
 - Cartesia https://cartesia.ai/
@@ -8,7 +8,7 @@ A provider-agnostic library for realtime speech-to-text.
 - ElevenLabs (scribe v2 realtime) https://elevenlabs.io/
 - Google [Cloud Speech-to-Text API](https://console.cloud.google.com/apis/library/speech.googleapis.com)
 - Speechmatics https://www.speechmatics.com/
- 
+
 Offers unified async interface — start one asyncio task, feed audio chunks to an input queue, and consume transcripts from an output queue without worrying about details.
 
 Providers are accessed directly via WebSocket (no provider-specific SDKs, except Google). This keeps dependencies light.
@@ -45,6 +45,9 @@ DEEPGRAM_API_KEY=<key>
 SPEECHMATICS_API_KEY=<key>
 CARTESIA_API_KEY=<key>
 GOOGLE_APPLICATION_CREDENTIALS=<path-to-service-account.json>
+
+# Optional — enables semantic understanding metric in benchmark and tests
+GEMINI_API_KEY=<key>
 ```
 
 ## Integration and Use
@@ -72,6 +75,8 @@ For end-to-end examples, see:
 
 Provider-specific SDKs are avoided where possible. All providers except Google are accessed directly via WebSocket. This keeps the dependency footprint small but means more maintenance work if a provider changes their API.
 
+`google-genai` is an optional dependency (commented out in `requirements.txt`) used only by the semantic understanding metric. Install it separately if needed — see [Semantic Understanding Metric](#semantic-understanding-metric).
+
 ## Testing
 
 The test suite validates STT provider accuracy against ground-truth transcripts.
@@ -94,6 +99,12 @@ pytest tests/test_stt.py::TestStt::test_eleven_labs -v
 pytest tests/test_stt.py::TestStt::test_deepgram -v
 pytest tests/test_stt.py::TestStt::test_speechmatics -v
 pytest tests/test_stt.py::TestStt::test_cartesia -v
+
+# Speechmatics with LLM semantic understanding metric (requires GEMINI_API_KEY + google-genai)
+pytest tests/test_stt.py::TestStt::test_speechmatics_semantics -v
+
+# Diff report and LLM metric unit tests
+pytest tests/test_diff.py -v
 ```
 
 ### Test Output
@@ -109,11 +120,27 @@ Test audio must be PCM 16kHz, mono, 16-bit. Convert with:
 ffmpeg -i input.mp3 -ac 1 -ar 16000 -c:a pcm_s16le output.wav
 ```
 
-## TODO
+## Semantic Understanding Metric
 
-### Data
-- Get various audio files to cover approx 1 hour of data — ideally around 10 male and 10 female voices of various types
-- Get the ground truth (use transcript from source, then check manually)
+In addition to WER and CER, the benchmark and tests support an optional **Semantic Error Rate (SER)** metric. Instead of counting character or word differences, it uses a Gemini LLM to extract semantic facts (subject / predicate / object) from both the expected and STT transcripts and measures how many expected facts are missing from the STT output.
+
+```
+SER = facts_missing / (facts_both + facts_missing) * 100
+```
+
+Lower is better — same convention as WER and CER.
+
+**To enable:**
+
+1. Add `GEMINI_API_KEY=<key>` to `.env`
+2. Install the optional dependency: `pip install google-genai`
+   (or uncomment `google-genai` in `requirements.txt` and re-run `pip install -r requirements.txt`)
+
+When active, `benchmark.py` adds a `custom_metric` (SER) column to the TSV report, and HTML diff reports gain a *Semantic Understanding* section with four stat cards (SER, Understanding, Missing%, Extra%) and a grouped fact list.
+
+See [`doc/semantic_understanding_metric.md`](doc/semantic_understanding_metric.md) for full details, including how to write your own custom metric.
+
+## TODO
 
 ### Code
 - Verify configuration and retrieval of transcripts (as with Speechmatics, where we initially did not capture everything returned) — especially Google might suffer from a similar problem
