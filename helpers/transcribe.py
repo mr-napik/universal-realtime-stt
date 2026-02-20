@@ -119,7 +119,14 @@ async def transcribe_and_diff(
     # read ground truth and compute diff
     expected_raw = txt_path.read_text(encoding="utf-8")
 
-    custom_metric = await custom_metric_fn(expected_raw, transcript_raw) if custom_metric_fn else None
+    custom_metric = None
+    if custom_metric_fn:
+        try:
+            custom_metric = await custom_metric_fn(expected_raw, transcript_raw)
+        except Exception as exc:
+            logger.warning("Custom metric failed, skipping: %s", exc)
+
+    # Build the repot and write it.
     report = DiffReport(expected_raw, transcript_raw, custom_metric=custom_metric)
     report.write_html(
         out_path,
