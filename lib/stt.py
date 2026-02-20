@@ -166,8 +166,9 @@ async def stt_session_task(
                 logger.warning("[STT] stt_session_task(): Explicitly cancelling sender task.")
                 sender.cancel()
 
-                # in case of cancel, await correct close and propagate the error up, if it was not cancel. :)
-                try:
-                    await sender
-                except (asyncio.CancelledError, Exception):
-                    pass
+            # Always await sender — even if it finished on its own with an exception —
+            # to prevent asyncio "Task exception was never retrieved" warnings.
+            try:
+                await sender
+            except (asyncio.CancelledError, Exception):
+                pass

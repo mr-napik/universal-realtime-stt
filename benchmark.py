@@ -173,7 +173,7 @@ def write_tsv(results: list[BenchmarkResult], ts: str) -> Path:
     for r in results_sorted:
         if r.report:
             metrics = r.report.to_metrics_dict()
-            row = [r.provider_name, r.file_name] + [metrics[c] for c in metric_cols] + [r.report_path.name if r.report_path else "", ""]
+            row = [r.provider_name, r.file_name] + [metrics.get(c, "") for c in metric_cols] + [r.report_path.name if r.report_path else "", ""]
         else:
             row = [r.provider_name, r.file_name] + [""] * len(metric_cols) + ["", r.error or "unknown error"]
         rows.append("\t".join(row))

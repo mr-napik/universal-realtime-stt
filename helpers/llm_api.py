@@ -105,7 +105,7 @@ class LLMBasicClient:
             return loads(raw)
         except JSONDecodeError:
             logger.exception(
-                "Failed to parse JSON from %s. raw_response=%r",
-                self.model_id, raw,
+                "Failed to parse JSON from %s:\nraw_text=%r\nfull_llm_response=%r",
+                self.model_id, raw, resp,
             )
             raise
