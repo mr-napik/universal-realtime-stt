@@ -22,12 +22,35 @@ async def transcribe_wav_realtime(
 ) -> str:
     """
     Transcribe a WAV file using the given STT provider.
-    This is more for tests, since it reads file from the disk
-    and then streams it in realtime pace.
 
-    Sets up the streaming pipeline (queues, sender/receiver tasks),
-    streams audio with real-time pacing, collects committed transcripts,
-    and returns the joined result.
+    Sets up the full streaming pipeline (audio queue, transcript queue,
+    sender/receiver tasks), streams audio with real-time pacing, collects
+    committed transcripts, and returns the joined result.
+
+    This is a single-session wrapper — it is not designed for session
+    respawn. If the provider drops the connection mid-stream the exception
+    propagates to the caller (see error handling below).
+
+    Normal flow:
+        1. stream_wav_file feeds PCM chunks into audio_queue, then pushes
+           None to signal end-of-audio.
+        2. stt_session_task's sender forwards chunks to the provider; on
+           receiving None it calls end_audio().
+        3. The provider commits its final results and closes; the receiver
+           drains events, pushes None into transcript_queue, and exits.
+        4. transcript_ingest_task collects all segments and returns them.
+
+    Error flow (provider drops connection early):
+        1. stt_session_task raises the provider's exception and cancels its
+           internal sender.
+        2. A done-callback on stt_task clears the `running` flag, which
+           stops stream_wav_file's audio chunk loop on its next iteration.
+           If the queue fills before that fires, stream_wav_file raises
+           QueueFullError (swallowed here — the real error is in stt_task).
+        3. After stream_wav_file exits, stt_task is awaited and its exception
+           re-raised. Before re-raising, a None sentinel is placed in
+           transcript_queue to unblock and cleanly shut down ingest_task.
+        4. The provider exception propagates to the caller.
 
     Args:
         provider: An already-instantiated (but not yet entered) RealtimeSttProvider.
@@ -39,6 +62,11 @@ async def transcribe_wav_realtime(
 
     Returns:
         The full transcript as a single string (segments joined by space).
+
+    Raises:
+        Any exception raised by stt_session_task (e.g. provider connection
+        errors). QueueFullError from the audio stream is suppressed when
+        it is a symptom of an STT failure.
     """
     input_audio_queue: asyncio.Queue = asyncio.Queue(maxsize=40)
     output_transcript_queue: asyncio.Queue = asyncio.Queue(maxsize=200)
