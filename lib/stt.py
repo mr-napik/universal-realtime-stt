@@ -102,14 +102,25 @@ async def stt_session_task(
         logger.debug("[STT] Provider context entered, creating sender/receiver tasks...")
         sender = asyncio.create_task(_sender())
         receiver = asyncio.create_task(_receiver())
-        logger.info("[STT] All tasks created, init successful, awaiting sender...")
+        logger.info("[STT] All tasks created, init successful, awaiting receiver...")
 
         try:
-            await sender  # finishes sending + end_audio() signals provider to close
-            await receiver  # finishes when provider's events() yields None
+            # Await receiver — it exits when the provider closes (cleanly or with error).
+            # Sender runs concurrently as a background task; in normal operation it finishes
+            # first (sends all audio + end_audio()), then the provider closes and receiver
+            # exits. If the provider closes early (error), receiver exits first and we
+            # cancel sender to stop it from spinning on a dead connection.
+            await receiver
         finally:
-            logger.debug("[STT] init_stt_once_provider(): reached finally.")
+            logger.debug("[STT] stt_session_task(): reached finally.")
+
+            # done() is true in all cases of normal finish, cancel or exception.
             if not sender.done():
+                logger.warning("[STT] stt_session_task(): Explicitly cancelling sender task.")
                 sender.cancel()
-            if not receiver.done():
-                receiver.cancel()
+
+                # in case of cancel, await correct close and propagate the error up, if it was not cancel. :)
+                try:
+                    await sender
+                except (asyncio.CancelledError, Exception):
+                    pass

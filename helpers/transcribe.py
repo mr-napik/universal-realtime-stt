@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Awaitable, Callable, Optional
 
 from helpers.diff_report import CustomMetricResult, DiffReport
-from helpers.stream_wav import stream_wav_file, logger
+from helpers.stream_wav import stream_wav_file, QueueFullError, logger
 from helpers.transcript_ingest import transcript_ingest_task
 from lib.stt import stt_session_task
 from lib.stt_provider import RealtimeSttProvider
@@ -48,19 +48,33 @@ async def transcribe_wav_realtime(
     stt_task = asyncio.create_task(stt_session_task(provider, input_audio_queue, output_transcript_queue, running))
     ingest_task = asyncio.create_task(transcript_ingest_task(running, output_transcript_queue))
 
-    await stream_wav_file(
-        wav_path,
-        input_audio_queue,
-        chunk_ms,
-        sample_rate,
-        realtime_factor=realtime_factor,
-        silence=silence_s,
-        running=running,
+    # When STT exits early due to a provider error, clear `running` so the wav
+    # chunk loop stops on its next iteration instead of filling the queue.
+    stt_task.add_done_callback(
+        lambda t: running.clear() if not t.cancelled() and t.exception() else None
     )
 
-    # At this point, streaming is completed and all chunks sent.
-    # Wait till STT session ends (task completes).
-    await stt_task
+    try:
+        await stream_wav_file(
+            wav_path,
+            input_audio_queue,
+            chunk_ms,
+            sample_rate,
+            realtime_factor=realtime_factor,
+            silence=silence_s,
+            running=running,
+        )
+    except QueueFullError:
+        pass  # STT exited early and cancelled its sender; queue backed up. Real error is in stt_task.
+
+    # Wait for STT to finish; propagate any provider error.
+    try:
+        await stt_task
+    except Exception:
+        # _receiver raised without putting None in transcript_queue — signal ingest to stop.
+        await output_transcript_queue.put(None)
+        await ingest_task
+        raise
 
     # Similarly wait for the ingest loop to exit and collect drained transcripts.
     segments = await ingest_task
